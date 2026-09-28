@@ -14,6 +14,9 @@ public final class Engine: @unchecked Sendable {
     /// Called on the main queue whenever an account's cache changed.
     public var onChange: ((String) -> Void)?
     public var onError: ((String, Error) -> Void)?
+    /// Called on the main queue when the engine itself changed accounts.json
+    /// (an alias found in the mail).
+    public var onAccountsChanged: (() -> Void)?
 
     public init(store: Store) {
         self.store = store
@@ -60,12 +63,36 @@ public final class Engine: @unchecked Sendable {
             do {
                 if let r = try await s.sync() {
                     log("\(account): \(r)")
-                    if r.changed > 0 || r.full { DispatchQueue.main.async { self.onChange?(account) } }
+                    if r.changed > 0 || r.full {
+                        DispatchQueue.main.async {
+                            self.adoptAliases()
+                            self.onChange?(account)
+                        }
+                    }
                 }
             } catch {
                 log("\(account): sync failed: \(error)")
                 DispatchQueue.main.async { self.onError?(account, error) }
             }
+        }
+    }
+
+    /// Forwarding aliases show up as accounts on their own, with no setup:
+    /// any alias the mail was sent to a few times is adopted.
+    public func adoptAliases() {
+        var f = store.config
+        var found: [String: [String]] = [:]
+        for a in f.accounts { found[a.email] = store.foundAliases(a.email) }
+        let added = f.adopt(found)
+        guard !added.isEmpty else { return }
+        do {
+            try AccountsStore.save(f)
+            store.config = f
+            try store.recomputeAll()
+            log("found alias \(added.joined(separator: ", ")) in the mail; showing it as an account")
+            onAccountsChanged?()
+        } catch {
+            log("could not adopt aliases \(added): \(error)")
         }
     }
 

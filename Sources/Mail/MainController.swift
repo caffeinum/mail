@@ -321,6 +321,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     func key(_ e: NSEvent) -> Bool {
         let mods = e.modifierFlags.intersection([.command, .control, .option])
         let ch = e.charactersIgnoringModifiers ?? ""
+        if mods == .control, let n = Int(ch), n >= 1 {
+            switchBox(n - 1)
+            return true
+        }
         if mods == .command {
             switch ch {
             case "k": Palette.shared.show(for: self); return true

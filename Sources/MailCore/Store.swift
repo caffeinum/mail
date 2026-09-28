@@ -316,6 +316,17 @@ public final class Store {
         ((try? db.scalar("SELECT has_body FROM threads WHERE account=? AND id=?", account, thread)) ?? 0) == 1
     }
 
+    /// Forwarding aliases that mail in this account was sent to — DuckDuckGo
+    /// names the alias in Duck-Original-To. A few messages are needed, so one
+    /// stray header doesn't make an account.
+    public func foundAliases(_ account: String, minimum: Int = 3) -> [String] {
+        (try? db.query("""
+            SELECT lower(duck_to) a, count(*) n FROM messages
+            WHERE account=? AND duck_to IS NOT NULL AND duck_to LIKE '%@%'
+            GROUP BY a HAVING n >= ? ORDER BY n DESC
+            """, account, minimum) { $0.text(0) }) ?? []
+    }
+
     // MARK: search
 
     /// Every word must match, each as a prefix: "inv acme" finds "Invoice

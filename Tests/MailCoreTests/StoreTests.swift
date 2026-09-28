@@ -123,3 +123,19 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         #expect(Outbox(store: s).pending(account: gmail).isEmpty)
     }
 }
+
+@Suite struct AliasDiscovery {
+    @Test func aliasInTheMailBecomesAnAccount() throws {
+        var file = AccountsFile(accounts: [AccountConfig(email: gmail)])
+        let s = try tempStore(file)
+        try s.upsert((1...3).map { msg("\($0)", thread: "t\($0)", from: "x\($0)@shop.com", duck: true) })
+        try s.upsert([MessageRecord(account: gmail, id: "z", threadID: "z", duckTo: "stray@duck.com")])
+        #expect(s.foundAliases(gmail) == ["someone@duck.com"])
+        #expect(file.adopt([gmail: s.foundAliases(gmail)]) == ["someone@duck.com"])
+        #expect(file.mailboxes.map(\.title) == [gmail, "duck.com"])
+        #expect(file.adopt([gmail: s.foundAliases(gmail)]).isEmpty)
+        file.accounts[0].aliases = []
+        file.accounts[0].ignoredAliases = ["someone@duck.com"]
+        #expect(file.adopt([gmail: ["someone@duck.com"]]).isEmpty)
+    }
+}

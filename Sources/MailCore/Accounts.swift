@@ -18,17 +18,20 @@ public struct AccountConfig: Codable, Equatable, Hashable {
     public var email: String
     public var label: String?
     public var aliases: [AliasRule]
+    /// Aliases found in the mail but removed by hand: not added back.
+    public var ignoredAliases: [String]
 
-    public init(email: String, label: String? = nil, aliases: [AliasRule] = []) {
-        self.email = email; self.label = label; self.aliases = aliases
+    public init(email: String, label: String? = nil, aliases: [AliasRule] = [], ignoredAliases: [String] = []) {
+        self.email = email; self.label = label; self.aliases = aliases; self.ignoredAliases = ignoredAliases
     }
 
-    enum CodingKeys: String, CodingKey { case email, label, aliases }
+    enum CodingKeys: String, CodingKey { case email, label, aliases, ignoredAliases }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         email = try c.decode(String.self, forKey: .email)
         label = try c.decodeIfPresent(String.self, forKey: .label)
         aliases = try c.decodeIfPresent([AliasRule].self, forKey: .aliases) ?? []
+        ignoredAliases = try c.decodeIfPresent([String].self, forKey: .ignoredAliases) ?? []
     }
 }
 
@@ -79,6 +82,26 @@ public struct AccountsFile: Codable, Equatable {
 
     public func aliases(for email: String) -> [AliasRule] {
         accounts.first { $0.email.lowercased() == email.lowercased() }?.aliases ?? []
+    }
+}
+
+extension AccountsFile {
+    /// Adds every forwarding alias seen in an account's mail that isn't
+    /// configured or dismissed. Returns what was added.
+    public mutating func adopt(_ found: [String: [String]]) -> [String] {
+        var added: [String] = []
+        for i in accounts.indices {
+            for addr in found[accounts[i].email] ?? [] {
+                let a = addr.lowercased()
+                guard !accounts[i].aliases.contains(where: { $0.address.lowercased() == a }),
+                      !accounts[i].ignoredAliases.contains(a) else { continue }
+                let domain = String(a.split(separator: "@").last ?? "")
+                let label = accounts[i].aliases.contains { $0.label == domain } ? a : domain
+                accounts[i].aliases.append(AliasRule(address: a, label: label))
+                added.append(a)
+            }
+        }
+        return added
     }
 }
 

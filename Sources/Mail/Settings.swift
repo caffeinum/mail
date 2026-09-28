@@ -74,6 +74,7 @@ final class SettingsModel: ObservableObject {
         guard let i = file.accounts.firstIndex(where: { $0.email == email }), address.contains("@") else { return }
         let l = label.isEmpty ? String(address.split(separator: "@").last ?? "") : label
         file.accounts[i].aliases.append(AliasRule(address: address.trimmingCharacters(in: .whitespaces), label: l))
+        file.accounts[i].ignoredAliases.removeAll { $0 == address.lowercased() }
         save()
         engine.store.config = file
         try? engine.store.recomputeAll()
@@ -83,6 +84,7 @@ final class SettingsModel: ObservableObject {
     func removeAlias(_ email: String, _ address: String) {
         guard let i = file.accounts.firstIndex(where: { $0.email == email }) else { return }
         file.accounts[i].aliases.removeAll { $0.address == address }
+        if !file.accounts[i].ignoredAliases.contains(address.lowercased()) { file.accounts[i].ignoredAliases.append(address.lowercased()) }
         save()
         engine.store.config = file
         try? engine.store.recomputeAll()
@@ -151,7 +153,7 @@ struct SettingsView: SwiftUI.View {
                             }
                         }
                     } else {
-                        Button("Add a duck.com alias…") { aliasFor = a.email }.buttonStyle(.link).controlSize(.small)
+                        Button("Add an alias by hand…") { aliasFor = a.email }.buttonStyle(.link).controlSize(.small)
                     }
                 }
                 Divider()

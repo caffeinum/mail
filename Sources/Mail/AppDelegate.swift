@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             buildMenu()
             WebRenderer.shared.prewarm()
             engine.onChange = { [weak self] a in self?.main.cacheChanged(account: a) }
+            engine.onAccountsChanged = { [weak self] in self?.main.accountsChanged() }
             engine.onError = { [weak self] a, e in self?.main.syncFailed(account: a, error: e) }
             engine.start()
             main.prefetchVisible()
