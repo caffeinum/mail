@@ -70,7 +70,7 @@ public enum Composer {
     public static func draft(_ mode: ReplyMode, thread: [MessageRecord], account: String, aliases: [AliasRule],
                              me: Address? = nil) throws -> OutgoingMessage {
         let mine = Set([account.lowercased()] + aliases.map { $0.address.lowercased() })
-        guard let target = thread.last(where: { !mine.contains($0.from?.normalized ?? "") }) ?? thread.last else {
+        guard let target = thread.last(where: { !mine.contains($0.shownFrom?.normalized ?? "") && !isSelfRelay($0.from, mine: mine) }) ?? thread.last else {
             throw ReplyError.noRecipient
         }
         let relay = thread.lazy.compactMap { relay(for: $0, aliases: aliases) }.first
@@ -85,7 +85,7 @@ public enum Composer {
         case .forward, .new: break
         }
         func keep(_ a: Address) -> Bool {
-            if mine.contains(a.normalized) { return false }
+            if mine.contains(a.normalized) || isSelfRelay(a, mine: mine) { return false }
             if let relay { return relay.isRelay(a) }
             return true
         }
@@ -118,6 +118,13 @@ public enum Composer {
     public static func fromAlias(_ rule: AliasRule, account: String, to: [Address], cc: [Address], subject: String, body: String) -> OutgoingMessage {
         let r = AliasRelay(rule)
         return OutgoingMessage(from: Address(email: account), to: to.map(r.relay), cc: cc.map(r.relay), subject: subject, body: body)
+    }
+
+    /// A relay address that wraps one of our own addresses — what the relay
+    /// hands back when our own reply comes around again.
+    public static func isSelfRelay(_ a: Address?, mine: Set<String>) -> Bool {
+        guard let e = a?.normalized else { return false }
+        return mine.contains { e.hasPrefix($0.replacingOccurrences(of: "@", with: "_at_") + "_") }
     }
 
     static func unique(_ a: [Address]) -> [Address] {

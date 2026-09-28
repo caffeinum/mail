@@ -7,11 +7,22 @@ public final class Store {
     public let db: Database
     public var config: AccountsFile
     private var labelIDs: [String: [String: String]] = [:]   // account → name → id
+    private let labelLock = NSLock()
 
     public init(path: String, config: AccountsFile) throws {
         db = try Database(path: path)
         self.config = config
         try migrate()
+        if get("sorter") != String(Sorter.version) {
+            try recomputeAll()
+            set("sorter", String(Sorter.version))
+        }
+    }
+
+    public func recomputeAll() throws {
+        try db.transaction {
+            try recompute(Set(try db.query("SELECT DISTINCT account, thread_id FROM messages") { $0.text(0) + "\u{1}" + $0.text(1) }))
+        }
     }
 
     public static let schemaVersion = 1
@@ -97,15 +108,18 @@ public final class Store {
             try db.run("DELETE FROM labels WHERE account=?", account)
             for l in labels { try db.run("INSERT INTO labels(account,id,name) VALUES(?,?,?)", account, l.id, l.name) }
         }
-        labelIDs[account] = nil
+        labelLock.lock(); labelIDs[account] = nil; labelLock.unlock()
     }
 
     public func labelID(_ account: String, name: String) -> String? {
-        if labelIDs[account] == nil {
-            let rows = (try? db.query("SELECT name, id FROM labels WHERE account=?", account) { ($0.text(0), $0.text(1)) }) ?? []
-            labelIDs[account] = Dictionary(rows, uniquingKeysWith: { a, _ in a })
-        }
-        return labelIDs[account]?[name]
+        labelLock.lock()
+        let cached = labelIDs[account]
+        labelLock.unlock()
+        if let cached { return cached[name] }
+        let rows = (try? db.query("SELECT name, id FROM labels WHERE account=?", account) { ($0.text(0), $0.text(1)) }) ?? []
+        let map = Dictionary(rows, uniquingKeysWith: { a, _ in a })
+        labelLock.lock(); labelIDs[account] = map; labelLock.unlock()
+        return map[name]
     }
 
     // MARK: messages
@@ -228,7 +242,7 @@ public final class Store {
         let union = Set(msgs.flatMap(\.labels))
         let inInbox = union.contains("INBOX")
         let alias = msgs.compactMap { $0.duckTo?.lowercased() }.first { aliases.contains($0) } ?? ""
-        let inbound = msgs.last { !mine.contains($0.from?.email.lowercased() ?? "") }
+        let inbound = msgs.last { !mine.contains($0.shownFrom?.normalized ?? "") && !Composer.isSelfRelay($0.from, mine: mine) }
         let senderAddr = inbound?.shownFrom
         let senderEmail = senderAddr?.email.lowercased() ?? ""
         let sender = senderAddr?.display ?? ("me → " + (last.to.first?.display ?? ""))

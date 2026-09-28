@@ -92,3 +92,19 @@ func duckMessage(cc: [Address] = [], replyTo: [Address] = [], body: String = "he
         #expect(d.from.name == "Me")
     }
 }
+
+@Suite struct AliasEcho {
+    /// Our own reply, bounced back through the relay, must not become the
+    /// person we answer — nor a recipient.
+    @Test func ownEchoIsNotTheSender() throws {
+        let echo = MessageRecord(account: gmail, id: "m2", threadID: "t1", date: 1_790_000_100_000, labels: ["INBOX"],
+                                 from: Address(name: "Me", email: "person_at_gmail.com_someone@duck.com"),
+                                 to: [Address(email: "support_at_hey.com_someone@duck.com")],
+                                 cc: [Address(email: "person_at_gmail.com_someone@duck.com")],
+                                 subject: "Re: Verify", duckFrom: Address(name: "Me", email: gmail), duckTo: "someone@duck.com")
+        let d = try Composer.draft(.replyAll, thread: [duckMessage(), echo], account: gmail, aliases: [duck])
+        #expect(d.to.map(\.email) == ["support_at_hey.com_someone@duck.com"])
+        #expect(!d.allRecipients.contains { $0.email.hasPrefix("person_at_gmail.com") })
+        try AliasRelay(duck).verify(d, account: gmail)
+    }
+}
