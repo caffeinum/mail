@@ -1,0 +1,22 @@
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_c440a6f69eb2c5 546-547
+  s_f86aa9fa11a3e8::t_d3f904b27110ca 156-199,202-205,210,262,282-283,311-315,326-334
+Sources/Mail/FeedStream.swift
+  s_f86aa9fa11a3e8::t_d3f904b27110ca 40,62,97-100,104-115,136-138,147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c4134e1dd297921785f1758b3e7c930011634a2d",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
