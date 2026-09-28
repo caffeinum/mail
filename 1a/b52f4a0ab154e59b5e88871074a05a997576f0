@@ -1,0 +1,31 @@
+.gitignore
+  s_f86aa9fa11a3e8::t_c20fbee225ec62 1-5
+Package.swift
+  s_f86aa9fa11a3e8::t_c20fbee225ec62 1-33
+Sources/MailCore/MailCore.swift
+  s_f86aa9fa11a3e8::t_c20fbee225ec62 1
+Tests/MailCoreTests/SmokeTests.swift
+  s_f86aa9fa11a3e8::t_c20fbee225ec62 1-4
+Sources/mailctl/main.swift
+  s_f86aa9fa11a3e8::t_c20fbee225ec62 1
+Sources/Mail/main.swift
+  s_f86aa9fa11a3e8::t_c20fbee225ec62 1
+README.md
+  s_f86aa9fa11a3e8::t_ad69605bddd5ce 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1ab52f4a0ab154e59b5e88871074a05a997576f0",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
