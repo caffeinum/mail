@@ -1,0 +1,32 @@
+Sources/Mail/Conversation.swift
+  s_f86aa9fa11a3e8::t_ac41dd4f0788be 21-28,33-35,39,46-47,49-51,53-54,65,120-121,134-135
+Sources/Mail/InlineReply.swift
+  s_f86aa9fa11a3e8::t_85c0c906a4bdae 1-120
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_ac41dd4f0788be 32-41,155-159,229,288-305,324-342,429-430
+Sources/Mail/ThreadView.swift
+  s_f86aa9fa11a3e8::t_ac41dd4f0788be 13-17,19,24,27,38-39,41,46-77
+  s_f86aa9fa11a3e8::t_a2e39485f62549 78
+Sources/Mail/WebRenderer.swift
+  s_f86aa9fa11a3e8::t_9a3f9a509edcda 3
+  s_f86aa9fa11a3e8::t_7400640a7433a8 60-62
+  s_f86aa9fa11a3e8::t_c35e6de059151d 30,32,35,47-55,58-59,63-64,66,70-84,87-96
+Sources/Mail/FeedStream.swift
+  s_f86aa9fa11a3e8::t_ac41dd4f0788be 45,53,55-58,70-72,77,85-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b97b0a1dba215ab774b150b681462dad8e8da3a2",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
