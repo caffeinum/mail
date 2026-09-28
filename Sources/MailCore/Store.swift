@@ -291,7 +291,9 @@ public final class Store {
         else if inbound != nil, !senderEmail.isEmpty { category = senderCategory(account: account, email: senderEmail) }
         else { category = Sorter.guess(last) }
 
-        // People wait to be let in; notifications and other machines don't.
+        // A request to act reaches the inbox whatever stream its sender has.
+        if category != .inbox, decided != "blocked", let inbound, Sorter.needsAction(inbound) { category = .inbox }
+        // People wait to be let in; machines don't.
         let pending = decided == nil && category == .inbox && inbound.map { !Sorter.isRobot($0) } == true
         let gone = (union.contains("TRASH") || union.contains("SPAM")) && !inInbox
         let labelled = (category == .feed && feedID.map(union.contains) == true)

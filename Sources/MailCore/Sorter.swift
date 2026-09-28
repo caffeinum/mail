@@ -1,13 +1,16 @@
 import Foundation
 
-/// Where mail goes when nobody has said: receipts to the Paper Trail,
-/// newsletters and promotions to the Feed, everything else — people and the
-/// notifications that matter — to the Inbox. People wait in New Senders
-/// until let in; machines don't. An explicit gmail label (mail/feed,
-/// mail/paper-trail) or a sender decision always wins.
+/// Where mail goes when nobody has said. People go to the Inbox once let
+/// in (they wait in New Senders until then). Machines go by what they send:
+/// newsletters and promotions to the Feed, receipts and notifications —
+/// deploys, sign-ins, bookings, the record of things that happened — to the
+/// Paper Trail. A machine asking you to act (update a payment method, an
+/// account suspended, a code you're waiting for) reaches the Inbox. An
+/// explicit gmail label (mail/feed, mail/paper-trail) or a sender decision
+/// decides the stream; only a request to act gets past it.
 public enum Sorter {
     /// Bump when the rules change: the cache re-sorts every thread on open.
-    public static let version = 5
+    public static let version = 6
 
     static let receiptWords = [
         "receipt", "invoice", "your order", "order confirm", "order #", "order no", "order number", "has shipped",
@@ -23,18 +26,30 @@ public enum Sorter {
                               "info", "service", "mailer", "bounce", "auto-confirm", "account", "accounts", "team",
                               "hello", "news", "newsletter", "updates", "digest", "security", "reservations"]
 
-    /// Mail a machine sends because something happened to you — these
-    /// belong in the Inbox even when they come with an unsubscribe link.
-    static let alertWords = [
-        "failed", "failure", "error", "alert", "sign-in", "sign in", "signin", "login", "log in", "verification",
-        "verify", "code", "password", "one-time", "otp", "2fa", "security", "action required", "requested",
-        "mentioned", "assigned", "review", "invited", "invitation", "approve", "approval", "reminder", "expir",
-        "due", "overdue", "declined", "suspended", "locked", "new device", "access", "deploy", "incident", "down",
+    /// A machine asking you to do something, now.
+    static let actionWords = [
+        "update your payment", "update payment", "payment method", "payment failed", "payment declined",
+        "couldn't be completed", "couldn&apos;t be completed", "could not be processed", "card declined", "card expir",
+        "past due", "overdue", "action required", "action needed", "suspended", "will be deleted", "will be suspended",
+        "locked", "verify your email", "confirm your email", "verification code", "one time password", "one-time password",
+        "login code", "sign-in code", "security code", "your code", "reset your password", "expires today", "final notice",
     ]
 
-    public static func isAlert(_ m: MessageRecord) -> Bool {
+    /// The subject of a notification: something happened, here's the record.
+    static let eventWords = [
+        "deploy", "failed", "build", "merged", "commit", "pull request", "review", "mentioned", "assigned", "comment",
+        "invited", "sign-in", "sign in", "new device", "login", "alert", "report", "summary", "briefing", "confirmed",
+        "scheduled", "reminder", "updated", "changed", "received", "approved", "completed", "joined", "shared",
+    ]
+
+    public static func needsAction(_ m: MessageRecord) -> Bool {
         let text = m.subject.lowercased()
-        return alertWords.contains { text.contains($0) }
+        return actionWords.contains { text.contains($0) }
+    }
+
+    static func isEvent(_ m: MessageRecord) -> Bool {
+        let text = m.subject.lowercased()
+        return eventWords.contains { text.contains($0) }
     }
 
     public static func isReceipt(_ m: MessageRecord) -> Bool {
@@ -59,10 +74,12 @@ public enum Sorter {
 
     public static func guess(_ m: MessageRecord) -> Category {
         let labels = Set(m.labels)
-        if isRobot(m) && isReceipt(m) { return .paper }
+        guard isRobot(m) else { return .inbox }
+        if needsAction(m) { return .inbox }
+        if isReceipt(m) { return .paper }
         if labels.contains("CATEGORY_PROMOTIONS") || labels.contains("CATEGORY_SOCIAL") || labels.contains("CATEGORY_FORUMS") { return .feed }
-        if isBulk(m) && !isAlert(m) { return .feed }
-        return .inbox
+        if isBulk(m) && !isEvent(m) { return .feed }
+        return .paper
     }
 
     /// Sorting follows the sender, not the single message: a sender whose

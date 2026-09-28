@@ -42,8 +42,11 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         var alert = msg("1", thread: "a", from: "notifications@vercel.com", subject: "Preview deployment failed", labels: ["INBOX", "CATEGORY_UPDATES"])
         alert.autoSubmitted = "auto-generated"
         try s.upsert([alert, msg("2", thread: "b", from: "jane@startup.io", subject: "coffee next week?")])
-        #expect(s.threads(box, .inbox).map(\.id) == ["a"])
+        #expect(s.threads(box, .paper).map(\.id) == ["a"])
         #expect(s.threads(box, .newSenders).map(\.id) == ["b"])
+        try s.upsert([msg("3", thread: "c", from: "notifications@vercel.com", subject: "Action required: update your payment method",
+                          labels: ["INBOX", "CATEGORY_UPDATES"], date: 9)])
+        #expect(s.threads(box, .inbox).map(\.id) == ["c"])
     }
 
     @Test func sortingFollowsTheSender() throws {

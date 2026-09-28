@@ -53,8 +53,10 @@ import Foundation
         #expect(Sorter.guess(m("news@substack.com", "This week in AI", list: true)) == .feed)
         #expect(Sorter.guess(m("deals@shop.com", "50% off", ["CATEGORY_PROMOTIONS"])) == .feed)
         #expect(Sorter.guess(m("friend@gmail.com", "dinner? I paid last time")) == .inbox)
-        #expect(Sorter.guess(m("notifications@vercel.com", "Preview deployment failed", ["CATEGORY_UPDATES"])) == .inbox)
-        #expect(Sorter.guess(m("security@github.com", "New sign-in to your account", ["CATEGORY_UPDATES"])) == .inbox)
+        #expect(Sorter.guess(m("notifications@vercel.com", "Preview deployment failed", ["CATEGORY_UPDATES"])) == .paper)
+        #expect(Sorter.guess(m("security@github.com", "New sign-in to your account", ["CATEGORY_UPDATES"])) == .paper)
+        #expect(Sorter.guess(m("billing@lime.com", "Update your payment method", ["CATEGORY_UPDATES"])) == .inbox)
+        #expect(Sorter.guess(m("hello@thecommons.org", "Public Events Bulletin", ["CATEGORY_UPDATES"], list: true)) == .feed)
         #expect(Sorter.isRobot(m("notifications@vercel.com", "x")) && !Sorter.isRobot(m("friend@gmail.com", "x")))
         let store = [m("orders@shop.com", "Your order has shipped"), m("orders@shop.com", "Big sale", ["CATEGORY_PROMOTIONS"]),
                      m("orders@shop.com", "New arrivals", ["CATEGORY_PROMOTIONS"])]
