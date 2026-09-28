@@ -12,7 +12,7 @@ public enum AuthError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case .noClient(let p): return "no oauth client at \(p) (gog's credentials.json)"
-        case .noToken(let e): return "no refresh token for \(e): not in post's keychain item nor gog's. add it in the app or run `mailctl auth \(e)`"
+        case .noToken(let e): return "no refresh token for \(e): not in Reply's keychain item nor gog's. add it in the app or run `mailctl auth \(e)`"
         case .refresh(let e, let code, let body): return "token refresh for \(e) failed: http \(code) \(body)"
         case .keychain(let m): return "keychain: \(m)"
         case .consent(let m): return "consent: \(m)"
@@ -83,9 +83,9 @@ public enum Keychain {
     }
 
     public static func token(for email: String) -> (StoredToken, source: String)? {
-        if let raw = read(service: service, account: "refresh:\(email.lowercased())"),
+        if let raw = read(service: service, account: "refresh:\(email.lowercased())") ?? read(service: Paths.legacyID, account: "refresh:\(email.lowercased())"),
            let d = Data(base64Encoded: raw), let t = try? JSONDecoder().decode(StoredToken.self, from: d) {
-            return (t, "post")
+            return (t, "reply")
         }
         for acct in ["token:default:\(email)", "token:\(email)"] {
             if let raw = read(service: gogService, account: acct),
@@ -98,7 +98,7 @@ public enum Keychain {
 
     public static func store(_ t: StoredToken, for email: String) throws {
         let b64 = try JSONEncoder().encode(t).base64EncodedString()
-        let cmd = "add-generic-password -U -A -s \(service) -a refresh:\(email.lowercased()) -l \"Post (gmail)\" -w \(b64)\n"
+        let cmd = "add-generic-password -U -A -s \(service) -a refresh:\(email.lowercased()) -l \"Reply (gmail)\" -w \(b64)\n"
         let (rc, _) = security(["-i"], stdin: cmd)
         guard rc == 0, read(service: service, account: "refresh:\(email.lowercased())") == b64 else {
             throw AuthError.keychain("could not store token for \(email)")
@@ -260,7 +260,7 @@ public enum Consent {
                 let items = URLComponents(string: "http://x\(path)")?.queryItems ?? []
                 let get = { (n: String) in items.first { $0.name == n }?.value }
                 let ok = get("code") != nil && get("state") == state
-                let page = ok ? "Signed in. You can close this tab and go back to Post."
+                let page = ok ? "Signed in. You can close this tab and go back to Reply."
                               : "Sign-in failed: \(get("error") ?? "no code"). Close this tab and try again."
                 let body = "<!doctype html><meta charset=utf-8><body style=\"font:15px -apple-system;padding:40px\">\(page)</body>"
                 let resp = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"

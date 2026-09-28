@@ -76,6 +76,18 @@ final class ThreadView: NSView {
         webBottom?.isActive = true
     }
 
+    /// Scrolls by a step and says whether the page was already at that end
+    /// before this press — the second press at the end moves to the next thread.
+    func nudge(_ d: Int, done: @escaping (Bool) -> Void) {
+        let js = """
+        (() => { const el = document.scrollingElement; const max = el.scrollHeight - window.innerHeight;
+          const atEnd = \(d) > 0 ? el.scrollTop >= max - 2 : el.scrollTop <= 2;
+          if (!atEnd) window.scrollBy({ top: \(d) * Math.max(120, window.innerHeight * 0.33), behavior: 'instant' });
+          return atEnd; })()
+        """
+        WebRenderer.shared.view.evaluateJavaScript(js) { r, _ in done((r as? Bool) ?? true) }
+    }
+
     func scrollBody(by pages: CGFloat) {
         WebRenderer.shared.view.evaluateJavaScript("window.scrollBy(0, \(pages) * window.innerHeight * 0.9)")
     }

@@ -22,7 +22,7 @@ func usage() -> Never {
     mailctl bodies <n> [view]                prefetch bodies for the top 50 threads
     mailctl outbox                           queued and recent changes
     mailctl idle <email>                     watch the imap doorbell for 2 minutes
-    mailctl launchbench <Post.app> [runs]    time from spawn until the window is on screen, seen from outside
+    mailctl launchbench <Reply.app> [runs]    time from spawn until the window is on screen, seen from outside
     """)
     exit(2)
 }
@@ -167,7 +167,7 @@ case "idle":
 case "launchbench":
     guard let app = args.first else { usage() }
     let runs = args.count > 1 ? Int(args[1]) ?? 10 : 10
-    let exe = URL(fileURLWithPath: app).appendingPathComponent("Contents/MacOS/Post").path
+    let exe = URL(fileURLWithPath: app).appendingPathComponent("Contents/MacOS/Reply").path
     var seen: [Double] = []
     var reported: [Double] = []
     for i in 0..<runs {

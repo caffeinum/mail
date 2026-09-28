@@ -106,7 +106,9 @@ extension AccountsFile {
 }
 
 public enum Paths {
-    public static let bundleID = "com.caffeinum.mail"
+    public static let bundleID = "com.caffeinum.reply"
+    /// Where the app kept its files before it was called Reply.
+    static let legacyID = "com.caffeinum.mail"
 
     public static var support: URL {
         if let o = ProcessInfo.processInfo.environment["POST_HOME"] { return URL(fileURLWithPath: o) }
@@ -116,10 +118,15 @@ public enum Paths {
 
     public static var accounts: URL { support.appendingPathComponent("accounts.json") }
     public static var database: URL { support.appendingPathComponent("cache.sqlite") }
-    public static var log: URL { support.appendingPathComponent("post.log") }
+    public static var log: URL { support.appendingPathComponent("reply.log") }
 
     public static func ensure() throws {
-        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        let fm = FileManager.default
+        let old = support.deletingLastPathComponent().appendingPathComponent(legacyID)
+        if ProcessInfo.processInfo.environment["POST_HOME"] == nil, !fm.fileExists(atPath: support.path), fm.fileExists(atPath: old.path) {
+            try fm.moveItem(at: old, to: support)
+        }
+        try fm.createDirectory(at: support, withIntermediateDirectories: true)
     }
 }
 

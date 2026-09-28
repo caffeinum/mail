@@ -1,4 +1,4 @@
-# mail
+# reply
 
 a native macOS gmail client. superhuman's speed, a few hey ideas, nothing else.
 
@@ -20,10 +20,10 @@ swift test          # with SDKROOT set, see build.sh
 ## run
 
 ```sh
-./build.sh && open build/Post.app
+./build.sh && open build/Reply.app
 ```
 
-accounts live in `~/Library/Application Support/com.caffeinum.mail/accounts.json` (⌘, in the app, or `build/mailctl accounts …`). an account gog already signed in works with no consent: post reads gog's refresh token from the keychain and uses gog's oauth client. gog's tokens stop at `gmail.modify`, so imap push needs one sign-in with the full mail scope (`build/mailctl auth you@gmail.com`, or "Sign in with Google…" in settings); until then the app polls every 60s while open.
+accounts live in `~/Library/Application Support/com.caffeinum.reply/accounts.json` (⌘, in the app, or `build/mailctl accounts …`). an account gog already signed in works with no consent: post reads gog's refresh token from the keychain and uses gog's oauth client. gog's tokens stop at `gmail.modify`, so imap push needs one sign-in with the full mail scope (`build/mailctl auth you@gmail.com`, or "Sign in with Google…" in settings); until then the app polls every 60s while open.
 
 an alias (duck.com) is a per-account rule: mail whose `Duck-Original-To` names the alias shows as its own account, with the sender taken from `Duck-Original-From`. replies go to the relay address, from the gmail account, and a check refuses anything that would reach a non-relay address or carry the gmail address in the text (`Tests/MailCoreTests/AliasTests.swift`).
 
@@ -35,8 +35,8 @@ j/k · gg/G · o/↩ open · u/esc back · e done · # trash · U unread · z un
 
 ## launch time
 
-`build/mailctl launchbench build/Post.app 12` spawns the app and watches for its window from outside. on an m-series mac under load (load avg ~11), 2026-09-28: the app commits its first frame (rows read from sqlite, no network) at ~150–170ms after process start, and the window is seen on screen at ~210–230ms median from spawn. the first launch after a build is ~950ms (signature + cold dyld). the 150ms target isn't met yet: most of the budget is appkit itself (NSApplication setup ~40ms, first window ~30–45ms, first commit ~35ms).
+`build/mailctl launchbench build/Reply.app 12` spawns the app and watches for its window from outside. on an m-series mac under load (load avg ~11), 2026-09-28: the app commits its first frame (rows read from sqlite, no network) at ~150–170ms after process start, and the window is seen on screen at ~210–230ms median from spawn. the first launch after a build is ~950ms (signature + cold dyld). the 150ms target isn't met yet: most of the budget is appkit itself (NSApplication setup ~40ms, first window ~30–45ms, first commit ~35ms).
 
 ## debug
 
-`POST_SCRIPT="wait 1; key j; key return; snap /tmp/a.png; quit" build/Post.app/Contents/MacOS/Post` drives the app through its own key router; `POST_BENCH=1` prints launch marks and exits.
+`POST_SCRIPT="wait 1; key j; key return; snap /tmp/a.png; quit" build/Reply.app/Contents/MacOS/Reply` drives the app through its own key router; `POST_BENCH=1` prints launch marks and exits.

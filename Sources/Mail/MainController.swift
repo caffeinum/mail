@@ -64,10 +64,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         Launch.mark("window")
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.title = "Post"
+        window.title = "Reply"
         window.minSize = NSSize(width: 640, height: 400)
-        window.setFrameAutosaveName("PostMain")
-        if !window.setFrameUsingName("PostMain") { window.center() }
+        window.setFrameAutosaveName("ReplyMain")
+        if !window.setFrameUsingName("ReplyMain") { window.center() }
         window.delegate = self
         window.isReleasedWhenClosed = false
         window.isRestorable = false
@@ -315,9 +315,28 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             }
             return
         }
+        if reading {
+            reader.nudge(d) { [weak self] atEnd in
+                guard let self else { return }
+                guard atEnd else { self.edgeArmed = nil; return }
+                if self.edgeArmed == d, Date().timeIntervalSince(self.edgeArmedAt) < 2 {
+                    self.edgeArmed = nil
+                    self.list.select(self.list.selectedIndex + d)
+                    self.openSelected()
+                } else {
+                    self.edgeArmed = d
+                    self.edgeArmedAt = Date()
+                    self.toast.show(d > 0 ? "End of thread  ·  j again for the next" : "Top of thread  ·  k again for the previous")
+                }
+            }
+            return
+        }
         list.select(list.selectedIndex + d)
-        if reading { openSelected() }
     }
+
+    /// The first j at the bottom of a thread only arms the move to the next.
+    private var edgeArmed: Int?
+    private var edgeArmedAt = Date.distantPast
 
     // MARK: actions
 
