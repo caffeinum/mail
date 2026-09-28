@@ -25,6 +25,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     let header = HeaderBar()
     let list = ListView()
     lazy var reader = ThreadView()
+    lazy var stream = FeedStream()
+    /// Feed reads as a stream of the emails themselves; v flips to the list.
+    private var streamMode = true
+    private var streaming: Bool { view == .feed && streamMode && !reading }
     let toast = Toast()
     private let content = NSView()
 
@@ -129,9 +133,17 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             return
         }
         list.set(store.threads(box, view, limit: 500), keep: id)
+        if streaming { showStream() } else if !reading { fill(content, with: list) }
         var counts: [View: Int] = [:]
         for v in View.tabs { counts[v] = store.count(box, v) }
         header.update(boxes: boxes, current: box, view: view, counts: counts, note: errors[box.account])
+    }
+
+    private func showStream() {
+        fill(content, with: stream)
+        let rows = list.rows.prefix(40)
+        let items = rows.map { t in FeedStream.item(t, store.messages(account: t.account, thread: t.id).last) }
+        stream.show(Array(items), at: max(0, list.selectedIndex))
     }
 
     // MARK: engine callbacks
@@ -199,6 +211,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     func openSelected() {
         guard let t = list.selected else { return }
+        stream.invalidate()
         reading = true
         fill(content, with: reader)
         reader.show(t, messages: store.messages(account: t.account, thread: t.id))
@@ -217,6 +230,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     }
 
     private func step(_ d: Int) {
+        if streaming {
+            stream.step(d) { [weak self] i in self?.list.select(i) }
+            return
+        }
         list.select(list.selectedIndex + d)
         if reading { openSelected() }
     }
@@ -315,7 +332,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         if pendingG {
             pendingG = false
             switch ch {
-            case "g": list.select(0); if reading { openSelected() }
+            case "g": list.select(0); if reading { openSelected() }; if streaming { stream.scroll(to: 0) }
             case "i": go(.inbox)
             case "f": go(.feed)
             case "p": go(.paper)
@@ -336,6 +353,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case 125: step(1); return true   // down
         case 126: step(-1); return true  // up
         case 49: // space
+            if streaming { stream.page(e.modifierFlags.contains(.shift) ? -1 : 1); return true }
             if reading { reader.scrollBody(by: e.modifierFlags.contains(.shift) ? -1 : 1); return true }
             return false
         default: break
@@ -345,7 +363,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "j": step(1)
         case "k": step(-1)
         case "g": pendingG = true
-        case "G": list.select(list.rows.count - 1); if reading { openSelected() }
+        case "G": list.select(list.rows.count - 1); if reading { openSelected() }; if streaming { stream.scroll(to: min(39, list.rows.count - 1)) }
+        case "v": if view == .feed && !reading { streamMode.toggle(); reloadList(keep: list.selected?.id) }
         case "o": if !reading { openSelected() }
         case "u": if reading { closeThread() }
         case "e": act("Done") { try actions.done($0) }

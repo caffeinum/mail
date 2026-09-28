@@ -21,6 +21,26 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
     }()
 
     private var ruled = false
+    /// Runs once when the next load finishes.
+    private var loaded: (() -> Void)?
+
+    /// Loads a bare page under the same policy, then hands it to `then` to
+    /// fill with app-side script (page script stays off).
+    func blank(background: String, then: @escaping () -> Void) {
+        loaded = then
+        let doc = """
+        <!doctype html><html><head><meta charset="utf-8">
+        <meta http-equiv="Content-Security-Policy" content="\(Self.csp)">
+        </head><body style="margin:0;background:\(background)"></body></html>
+        """
+        view.loadHTMLString(doc, baseURL: nil)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        let f = loaded
+        loaded = nil
+        f?()
+    }
 
     func prewarm() {
         view.loadHTMLString("<!doctype html><html><body></body></html>", baseURL: nil)
@@ -35,6 +55,7 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
     static let csp = "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:; media-src 'none'; frame-src 'none'; form-action 'none'"
 
     func render(html: String) {
+        loaded = nil
         let doc = """
         <!doctype html><html><head><meta charset="utf-8">
         <meta http-equiv="Content-Security-Policy" content="\(Self.csp)">
