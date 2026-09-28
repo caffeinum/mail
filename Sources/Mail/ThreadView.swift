@@ -82,7 +82,21 @@ final class ThreadView: NSView {
 
     private func rebuildHeaders() {
         headers.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for (i, m) in messages.enumerated() {
+        // A long thread shows its first message, a count, and the last few —
+        // the open one always among them.
+        var shown = Array(messages.indices)
+        if messages.count > 6 {
+            shown = [0] + Array(messages.count - 4..<messages.count)
+            if !shown.contains(openIndex) { shown.insert(openIndex, at: 1) }
+        }
+        for (n, i) in shown.enumerated() {
+            let m = messages[i]
+            if n == 1, shown[0] == 0, i > 1 {
+                let more = NSTextField(labelWithString: "  \(i - 1) more")
+                more.font = .systemFont(ofSize: 12)
+                more.textColor = .tertiaryLabelColor
+                headers.addArrangedSubview(more)
+            }
             let row = HeaderRow(message: m, open: i == openIndex) { [weak self] in self?.open(message: i) }
             headers.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: headers.widthAnchor).isActive = true
