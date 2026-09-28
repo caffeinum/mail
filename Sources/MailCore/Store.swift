@@ -25,11 +25,22 @@ public final class Store {
         }
     }
 
-    public static let schemaVersion = 1
+    public static let schemaVersion = 2
 
     private func migrate() throws {
         let v = try db.scalar("PRAGMA user_version")
         guard v < Self.schemaVersion else { return }
+        if v == 1 {
+            // v2: who each message is really from, indexed, so sorting can
+            // follow the sender.
+            try db.exec("ALTER TABLE messages ADD COLUMN sender TEXT NOT NULL DEFAULT ''")
+            try db.transaction {
+                for (rowid, from, duck) in try db.query("SELECT rowid, from_json, duck_from_json FROM messages", map: { ($0.int64(0), $0.string(1), $0.string(2)) }) {
+                    let a = unjson(duck, Address.self) ?? unjson(from, Address.self)
+                    try db.run("UPDATE messages SET sender=? WHERE rowid=?", a?.normalized ?? "", rowid)
+                }
+            }
+        }
         try db.exec("""
         CREATE TABLE IF NOT EXISTS accounts(
             email TEXT PRIMARY KEY, history_id TEXT, seeded INTEGER NOT NULL DEFAULT 0, synced_at INTEGER);
@@ -41,8 +52,9 @@ public final class Store {
             subject TEXT NOT NULL, snippet TEXT NOT NULL, message_id TEXT, in_reply_to TEXT, refs TEXT,
             list_unsubscribe TEXT, list_id TEXT, precedence TEXT, auto_submitted TEXT,
             duck_from_json TEXT, duck_to TEXT, body_text TEXT, body_html TEXT, has_body INTEGER NOT NULL DEFAULT 0,
-            UNIQUE(account, id));
+            sender TEXT NOT NULL DEFAULT '', UNIQUE(account, id));
         CREATE INDEX IF NOT EXISTS messages_thread ON messages(account, thread_id, date);
+        CREATE INDEX IF NOT EXISTS messages_sender ON messages(account, sender);
         CREATE TABLE IF NOT EXISTS threads(
             account TEXT NOT NULL, id TEXT NOT NULL, alias TEXT NOT NULL DEFAULT '', view TEXT NOT NULL DEFAULT '',
             category TEXT NOT NULL, date INTEGER NOT NULL, subject TEXT NOT NULL, snippet TEXT NOT NULL,
@@ -142,8 +154,8 @@ public final class Store {
                 try db.run("""
                 INSERT INTO messages(account,id,thread_id,history_id,date,labels,from_json,to_json,cc_json,reply_to_json,
                     subject,snippet,message_id,in_reply_to,refs,list_unsubscribe,list_id,precedence,auto_submitted,
-                    duck_from_json,duck_to,body_text,body_html,has_body)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    duck_from_json,duck_to,body_text,body_html,has_body,sender)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(account,id) DO UPDATE SET
                     thread_id=excluded.thread_id, history_id=excluded.history_id, date=excluded.date, labels=excluded.labels,
                     from_json=excluded.from_json, to_json=excluded.to_json, cc_json=excluded.cc_json,
@@ -153,11 +165,11 @@ public final class Store {
                     auto_submitted=excluded.auto_submitted, duck_from_json=excluded.duck_from_json, duck_to=excluded.duck_to,
                     body_text=CASE WHEN excluded.has_body THEN excluded.body_text ELSE messages.body_text END,
                     body_html=CASE WHEN excluded.has_body THEN excluded.body_html ELSE messages.body_html END,
-                    has_body=MAX(excluded.has_body, messages.has_body)
+                    has_body=MAX(excluded.has_body, messages.has_body), sender=excluded.sender
                 """, [m.account, m.id, m.threadID, m.historyID, m.date, Self.labelText(m.labels), json(m.from), json(m.to),
                       json(m.cc), json(m.replyTo), m.subject, m.snippet, m.messageID, m.inReplyTo,
                       m.references.joined(separator: " "), m.listUnsubscribe, m.listID, m.precedence, m.autoSubmitted,
-                      json(m.duckFrom), m.duckTo, m.bodyText, m.bodyHTML, m.hasBody])
+                      json(m.duckFrom), m.duckTo, m.bodyText, m.bodyHTML, m.hasBody, m.shownFrom?.normalized ?? ""])
                 try index(m)
                 touched.insert(m.account + "\u{1}" + m.threadID)
             }
@@ -220,7 +232,28 @@ public final class Store {
         try db.transaction { try recompute(Set(threads.map { account + "\u{1}" + $0 })) }
     }
 
+    private var senderCategories: [String: Category] = [:]
+
+    /// The stream a sender's mail goes to, judged on everything they've sent.
+    func senderCategory(account: String, email: String) -> Category {
+        let key = account + "\u{1}" + email
+        if let c = senderCategories[key] { return c }
+        let msgs = (try? db.query("""
+            SELECT labels, subject, snippet, list_unsubscribe, list_id, precedence, auto_submitted, from_json, duck_from_json
+            FROM messages WHERE account=? AND sender=? ORDER BY date DESC LIMIT 50
+            """, account, email) { r in
+            MessageRecord(account: account, id: "", threadID: "", labels: Self.labelList(r.text(0)),
+                          from: unjson(r.string(7), Address.self), subject: r.text(1), snippet: r.text(2),
+                          listUnsubscribe: r.string(3), listID: r.string(4), precedence: r.string(5), autoSubmitted: r.string(6),
+                          duckFrom: unjson(r.string(8), Address.self))
+        }) ?? []
+        let c = Sorter.category(of: msgs)
+        senderCategories[key] = c
+        return c
+    }
+
     private func recompute(_ keys: Set<String>) throws {
+        senderCategories.removeAll()
         for key in keys {
             let parts = key.split(separator: "\u{1}", maxSplits: 1).map(String.init)
             try recomputeThread(account: parts[0], id: parts[1])
@@ -255,9 +288,11 @@ public final class Store {
         if let feedID, union.contains(feedID) { category = .feed }
         else if let paperID, union.contains(paperID) { category = .paper }
         else if let d = decided, let c = Category(rawValue: d) { category = c }
-        else { category = Sorter.guess(inbound ?? last) }
+        else if inbound != nil, !senderEmail.isEmpty { category = senderCategory(account: account, email: senderEmail) }
+        else { category = Sorter.guess(last) }
 
-        let pending = decided == nil && inbound != nil && category == .inbox
+        // People wait to be let in; notifications and other machines don't.
+        let pending = decided == nil && category == .inbox && inbound.map { !Sorter.isRobot($0) } == true
         let gone = (union.contains("TRASH") || union.contains("SPAM")) && !inInbox
         let labelled = (category == .feed && feedID.map(union.contains) == true)
             || (category == .paper && paperID.map(union.contains) == true)

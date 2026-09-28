@@ -36,6 +36,25 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         #expect(s.threads(duckBox, .inbox).first?.sender == "bob@z.com")
     }
 
+    @Test func machinesSkipScreeningPeopleDont() throws {
+        let s = try tempStore()
+        try s.seedSenders(gmail)
+        var alert = msg("1", thread: "a", from: "notifications@vercel.com", subject: "Preview deployment failed", labels: ["INBOX", "CATEGORY_UPDATES"])
+        alert.autoSubmitted = "auto-generated"
+        try s.upsert([alert, msg("2", thread: "b", from: "jane@startup.io", subject: "coffee next week?")])
+        #expect(s.threads(box, .inbox).map(\.id) == ["a"])
+        #expect(s.threads(box, .newSenders).map(\.id) == ["b"])
+    }
+
+    @Test func sortingFollowsTheSender() throws {
+        let s = try tempStore()
+        try s.upsert([
+            msg("1", thread: "a", from: "orders@shop.com", subject: "Your receipt", labels: ["INBOX", "CATEGORY_UPDATES"], date: 1),
+            msg("2", thread: "b", from: "orders@shop.com", subject: "Fall collection is here", labels: ["INBOX", "CATEGORY_PROMOTIONS"], date: 2),
+        ])
+        #expect(Set(s.threads(box, .paper).map(\.id)) == ["a", "b"])
+    }
+
     @Test func newSenderWaitsUntilDecided() throws {
         let s = try tempStore()
         try s.upsert([msg("1", thread: "a", from: "ann@x.com")])

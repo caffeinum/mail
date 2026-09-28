@@ -214,6 +214,15 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         if let box { engine.prefetch(box.account, store.threadsNeedingBodies(box, v, limit: 50)) }
     }
 
+    /// Tab walks Inbox → Feed → Paper Trail (→ New Senders when someone's
+    /// waiting) and round again.
+    func cycleStream(_ d: Int) {
+        guard let box else { return }
+        let tabs = View.tabs.filter { $0 != .newSenders || store.count(box, .newSenders) > 0 }
+        let i = tabs.firstIndex(of: lastTab) ?? 0
+        go(tabs[(i + d + tabs.count) % tabs.count])
+    }
+
     func switchBox(_ i: Int) {
         guard boxes.indices.contains(i) else { return }
         if reading { closeThread() }
@@ -379,8 +388,13 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         if mods == .command {
             switch ch {
             case "k": Palette.shared.show(for: self); return true
+            case "r": engine.syncAll(); toast.show("Checking for new mail…"); return true
             default: return false
             }
+        }
+        if e.keyCode == 48, mods.isEmpty { // tab: the next stream
+            cycleStream(e.modifierFlags.contains(.shift) ? -1 : 1)
+            return true
         }
         guard mods.isEmpty else { return false }
 
