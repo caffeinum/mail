@@ -172,7 +172,7 @@ final class HelpOverlay: Overlay {
         ("/", "search"), ("⌘K", "command palette"), ("c", "new message"), ("r / R / F", "reply / reply all / forward"),
         ("⌘↩", "send"), ("tab / ⇧tab", "next / previous stream"), ("g i · g f · g p · g n", "inbox · feed · paper trail · new senders"),
         ("⌃1 ⌃2 ⌃3", "switch account"), ("a · f · p · x", "new sender: let in · feed · paper trail · block"),
-        ("i / ⇧I", "images for this email / always from sender"), ("v", "feed as stream / list"),
+        ("i / ⇧I", "images for this email / always from sender"), ("m", "move sender to inbox · feed · paper trail"), ("v", "feed as stream / list"),
         ("space", "scroll"), ("⌘R", "check for mail"), ("⌘,", "accounts"), ("?", "this card"),
     ]
 
@@ -190,6 +190,47 @@ final class HelpOverlay: Overlay {
         NSLayoutConstraint.activate([
             grid.topAnchor.constraint(equalTo: card.topAnchor, constant: 24), grid.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 28),
             grid.trailingAnchor.constraint(lessThanOrEqualTo: card.trailingAnchor, constant: -28), grid.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -24),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+}
+
+/// m — move a thread's sender to a stream. It teaches the sorting: every
+/// thread from them, now and later, goes there too.
+final class MoveOverlay: Overlay {
+    static let choices: [(key: String, title: String, decision: String)] = [
+        ("i", "Inbox", "inbox"), ("f", "Feed", "feed"), ("p", "Paper Trail", "paper"), ("x", "Block", "blocked"),
+    ]
+    let email: String
+
+    init(sender: String, email: String, current: String) {
+        self.email = email
+        super.init(width: 420, top: 140)
+        let title = NSTextField(labelWithString: "Move \(sender) to…")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        let sub = NSTextField(wrappingLabelWithString: "Everything from \(email) goes there from now on.")
+        sub.font = .systemFont(ofSize: 12)
+        sub.textColor = .secondaryLabelColor
+        var rows: [NSView] = [title, sub]
+        for c in Self.choices {
+            let k = NSTextField(labelWithString: c.key)
+            k.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
+            k.textColor = .secondaryLabelColor
+            let t = NSTextField(labelWithString: c.title + (c.decision == current ? "  (now)" : ""))
+            t.font = .systemFont(ofSize: 14)
+            rows.append(NSStackView(views: [k, t]))
+        }
+        let stack = NSStackView(views: rows)
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 20), stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: card.trailingAnchor, constant: -24), stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20),
+            sub.widthAnchor.constraint(lessThanOrEqualToConstant: 360),
         ])
     }
 

@@ -58,10 +58,18 @@ final class PaletteOverlay: Overlay, NSTableViewDataSource, NSTableViewDelegate,
             .init(title: "Reply All", key: "R") { m.compose(.replyAll) },
             .init(title: "Forward", key: "F") { m.compose(.forward) },
             .init(title: "Search", key: "/") { m.startSearch() },
+            .init(title: "Move to…", key: "m") { m.showMove() },
             .init(title: "Check for Mail", key: "⌘R") { m.engine.syncAll() },
             .init(title: "Accounts", key: "⌘,") { m.showSettings() },
             .init(title: "Keyboard Shortcuts", key: "?") { m.toggleHelp() },
         ]
+        if let t = m.list.selected, !t.senderEmail.isEmpty {
+            for choice in MoveOverlay.choices {
+                c.append(.init(title: "Move \(t.sender) to \(choice.title)", key: "m \(choice.key)") {
+                    m.moveSender(t.senderEmail, to: choice.decision, title: choice.title)
+                })
+            }
+        }
         for (i, b) in m.boxes.enumerated() {
             c.append(.init(title: "Switch to \(b.title)", key: "⌃\(i + 1)") { m.switchBox(i) })
         }

@@ -437,6 +437,21 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         if window.firstResponder == nil || window.firstResponder === window { window.makeFirstResponder(reading ? reader : list.table) }
     }
 
+    func showMove() {
+        guard let t = reading ? reader.thread : list.selected, !t.senderEmail.isEmpty else {
+            toast.show("Nothing to move — this thread has no sender but you"); return
+        }
+        showOverlay(MoveOverlay(sender: t.sender, email: t.senderEmail, current: t.category.rawValue))
+    }
+
+    /// Teaches the sorting: the sender's mail, old and new, follows.
+    func moveSender(_ email: String, to decision: String, title: String) {
+        guard let box else { return }
+        let backToList = reading
+        act("Moved \(email) to \(title)") { _ in try actions.decide(account: box.account, email: email, category: decision) }
+        if backToList && reading { closeThread() }
+    }
+
     func toggleHelp() {
         if overlay is HelpOverlay { closeOverlay() } else { showOverlay(HelpOverlay()) }
     }
@@ -509,6 +524,14 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             default: return false
             }
         }
+        if let move = overlay as? MoveOverlay {
+            if e.keyCode == 53 { closeOverlay(); return true }
+            if let c = MoveOverlay.choices.first(where: { $0.key == ch }) {
+                closeOverlay()
+                moveSender(move.email, to: c.decision, title: c.title)
+            }
+            return true
+        }
         if overlay != nil {
             if e.keyCode == 53 || ch == "?" { closeOverlay(); return true }
             return overlay is HelpOverlay
@@ -566,6 +589,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "#": act("Trashed") { try actions.trash($0) }
         case "U": act("Toggled unread") { try actions.toggleUnread($0[0]) }
         case "z": undo()
+        case "m": showMove()
         case "i": loadImages(always: false)
         case "I": loadImages(always: true)
         case "/": startSearch()
