@@ -1,0 +1,41 @@
+Sources/MailCore/MIME.swift
+  s_f86aa9fa11a3e8::t_9c9bbe2ec1d80d 1-158
+Tests/MailCoreTests/AliasTests.swift
+  s_f86aa9fa11a3e8::t_72cd93a18a2640 1-94
+Tests/MailCoreTests/ParsingTests.swift
+  s_f86aa9fa11a3e8::t_957f8fb115b4ff 1-63
+Sources/MailCore/Accounts.swift
+  s_f86aa9fa11a3e8::t_c6a69c28ebbe5e 1-115
+Sources/MailCore/Address.swift
+  s_f86aa9fa11a3e8::t_b37f2c0d1c87ba 1-72
+Sources/MailCore/Gmail.swift
+  s_f86aa9fa11a3e8::t_4a432f77a41ce8 1-222
+Sources/MailCore/Message.swift
+  s_f86aa9fa11a3e8::t_3c7c8554a7fae9 1-173
+Sources/MailCore/Reply.swift
+  s_f86aa9fa11a3e8::t_dcf6cb699165cc 1-141
+Sources/MailCore/Auth.swift
+  s_f86aa9fa11a3e8::t_e6fdaaceee188c 1-284
+Sources/MailCore/Store.swift
+  s_f86aa9fa11a3e8::t_0aacd7521e60aa 1-423
+Sources/MailCore/Sorter.swift
+  s_f86aa9fa11a3e8::t_2cb5b9f532a259 1-34
+Sources/MailCore/SQLite.swift
+  s_f86aa9fa11a3e8::t_87730b1cfe1a53 1-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "704e1c6fbd4d5d6fcecad4b3f4e6c319c8c0ae59",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
