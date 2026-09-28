@@ -37,6 +37,7 @@ final class FeedStream: NSView {
         let when: String
         let html: String
         let cached: Bool
+        var unread = false
     }
 
     /// One email as a card, for the thread view: same isolation and
@@ -58,7 +59,7 @@ final class FeedStream: NSView {
         }
         else if let text = m?.bodyText, !text.isEmpty { html = "<pre>\(escape(text))</pre>" }
         else { html = "<p class=snip>\(escape(t.snippet))</p>" }
-        return Item(id: t.id, sender: t.sender, subject: t.subject, when: ThreadRow.when(t.date), html: html, cached: m?.hasBody ?? false)
+        return Item(id: t.id, sender: t.sender, subject: t.subject, when: ThreadRow.when(t.date), html: html, cached: m?.hasBody ?? false, unread: t.unread)
     }
 
     static func escape(_ s: String) -> String {
@@ -93,10 +94,23 @@ final class FeedStream: NSView {
 
     /// j/k from wherever the reader has scrolled to, not from where the
     /// cursor last was.
-    func step(_ d: Int, done: @escaping (Int) -> Void) {
-        web.evaluateJavaScript("step(\(d))") { r, _ in
-            if let i = r as? Int { done(i) }
+    /// Calls back with the new index and the one stepped away from.
+    func step(_ d: Int, done: @escaping (Int, Int) -> Void) {
+        web.evaluateJavaScript("(() => { const f = here(); return [step(\(d)), f]; })()") { r, _ in
+            if let a = r as? [Int], a.count == 2 { done(a[0], a[1]) }
         }
+    }
+
+    /// The post at the top of the view right now.
+    func here(_ done: @escaping (Int) -> Void) {
+        guard web.superview === self, !ids.isEmpty else { return }
+        web.evaluateJavaScript("typeof here === 'function' ? here() : -1") { r, _ in
+            if let i = r as? Int, i >= 0 { done(i) }
+        }
+    }
+
+    func markRead(_ ids: [String]) {
+        run("for (const id of \(json(ids))) document.getElementById('t'+id)?.classList.add('read')")
     }
 
     func page(_ d: CGFloat) { run("window.scrollBy(0, \(d) * window.innerHeight * 0.9)") }
@@ -119,6 +133,9 @@ final class FeedStream: NSView {
         article { max-width: 760px; margin: 0 auto 22px; background: #fff; border-radius: 10px;
                   box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden; border-left: 3px solid transparent; }
         article.cur { border-left-color: #0a84ff; }
+        article header b::before { content: '● '; color: #0a84ff; font-size: 10px; vertical-align: 2px; }
+        article.read header b::before { content: ''; }
+        article.read header { color: #86868b; }
         header { padding: 14px 22px 10px; border-bottom: 1px solid #eee; color: #1d1d1f; }
         header b { font-weight: 600; } header span { color: #86868b; float: right; font-size: 12px; }
         header div { font-size: 16px; font-weight: 600; margin-top: 4px; }
@@ -127,6 +144,7 @@ final class FeedStream: NSView {
       for (const it of items) {
         const a = document.createElement('article');
         a.id = 't' + it.id;
+        if (!it.unread) a.classList.add('read');
         if (it.sender || it.subject) {
         const h = document.createElement('header');
         h.innerHTML = '<span></span><b></b><div></div>';

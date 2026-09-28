@@ -153,14 +153,61 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         header.update(boxes: boxes, current: box, view: view, counts: counts, note: errors[box.account])
     }
 
+    /// The feed opens unread-first, and keeps that order while you read —
+    /// posts turning read don't jump around under you. New mail goes on top.
+    private var feedOrder: [String]?
+    private var streamRows: [ThreadSummary] = []
+    private var viewedTimer: Timer?
+
+    private func orderedFeed() -> [ThreadSummary] {
+        let rows = Array(list.rows.prefix(60))
+        if feedOrder == nil { feedOrder = (rows.filter(\.unread) + rows.filter { !$0.unread }).map(\.id) }
+        let pos = Dictionary((feedOrder ?? []).enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        let fresh = rows.filter { pos[$0.id] == nil }
+        let known = rows.filter { pos[$0.id] != nil }.sorted { pos[$0.id]! < pos[$1.id]! }
+        return Array((fresh + known).prefix(40))
+    }
+
+    /// Posts you've scrolled or stepped past count as read.
+    private func markViewed(_ ids: [String]) {
+        var done: [String] = []
+        for id in ids {
+            guard let i = streamRows.firstIndex(where: { $0.id == id }), streamRows[i].unread else { continue }
+            actions.markRead(streamRows[i])
+            done.append(id)
+        }
+        guard !done.isEmpty else { return }
+        streamRows = streamRows.map { t in done.contains(t.id) ? store.thread(account: t.account, id: t.id) ?? t : t }
+        stream.markRead(done)
+        engine.pokeOutbox()
+    }
+
+    private func watchViewed() {
+        viewedTimer?.invalidate()
+        viewedTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            guard let self, self.streaming, self.pane == nil else { return }
+            self.stream.here { i in
+                self.markViewed(self.streamRows.prefix(i).map(\.id))
+            }
+        }
+    }
+
+    private func selectStream(_ i: Int) {
+        guard streamRows.indices.contains(i), let row = list.rows.firstIndex(where: { $0.id == streamRows[i].id }) else { return }
+        list.select(row)
+    }
+
     private func showStream() {
         fill(content, with: stream)
-        let rows = list.rows.prefix(40)
+        streamRows = orderedFeed()
+        if viewedTimer == nil { watchViewed() }
+        let rows = streamRows
+        let at = streamRows.firstIndex { $0.id == list.selected?.id } ?? 0
         let items = rows.map { t -> FeedStream.Item in
             let last = store.messages(account: t.account, thread: t.id).last
             return FeedStream.item(t, last, images: streamImages || last.map(imagesAllowed) == true)
         }
-        stream.show(Array(items), at: max(0, list.selectedIndex), images: streamImages || items.contains { !$0.html.contains("blocked-http") && WebRenderer.hasRemoteImages($0.html) })
+        stream.show(Array(items), at: at, images: streamImages || items.contains { !$0.html.contains("blocked-http") && WebRenderer.hasRemoteImages($0.html) })
     }
 
     // MARK: engine callbacks
@@ -212,6 +259,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     func go(_ v: View) {
         if reading { closeThread() }
+        if v == .feed && view != .feed { feedOrder = nil; stream.invalidate() }
         view = v
         if case .search = v {} else { lastTab = v; header.search.stringValue = "" }
         reloadList()
@@ -231,6 +279,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         guard boxes.indices.contains(i) else { return }
         if reading { closeThread() }
         box = boxes[i]
+        feedOrder = nil
+        stream.invalidate()
         if case .search = view { view = lastTab }
         reloadList()
     }
@@ -258,7 +308,11 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     private func step(_ d: Int) {
         if streaming {
-            stream.step(d) { [weak self] i in self?.list.select(i) }
+            stream.step(d) { [weak self] i, from in
+                guard let self else { return }
+                if d > 0, self.streamRows.indices.contains(from) { self.markViewed([self.streamRows[from].id]) }
+                self.selectStream(i)
+            }
             return
         }
         list.select(list.selectedIndex + d)
@@ -269,6 +323,15 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     private func act(_ title: String, _ f: ([ThreadSummary]) throws -> Void) {
         guard let t = list.selected else { return }
+        if streaming {
+            // Stay where you are: the next post slides up into place.
+            let si = streamRows.firstIndex { $0.id == t.id } ?? 0
+            let next = streamRows.indices.contains(si + 1) ? streamRows[si + 1].id : (si > 0 ? streamRows[si - 1].id : nil)
+            do { try f([t]) } catch { toast.show("\(title) failed: \(error)"); return }
+            reloadList(keep: next)
+            toast.show("\(title)  ·  z to undo")
+            return
+        }
         let i = list.selectedIndex
         do { try f([t]) } catch { toast.show("\(title) failed: \(error)"); return }
         reloadList()
@@ -480,7 +543,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             return false
         case 36, 76: // return
             if !reading { openSelected(); return true }
-            return false
+            compose(.reply)
+            return true
         case 125: step(1); return true   // down
         case 126: step(-1); return true  // up
         case 49: // space
