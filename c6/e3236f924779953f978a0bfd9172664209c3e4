@@ -1,0 +1,21 @@
+Sources/Mail/ThreadView.swift
+  s_f86aa9fa11a3e8::t_2278a2a7eb9a82 85-99
+README.md
+  s_f86aa9fa11a3e8::t_bec84435ab4cbc 19-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c6e3236f924779953f978a0bfd9172664209c3e4",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
