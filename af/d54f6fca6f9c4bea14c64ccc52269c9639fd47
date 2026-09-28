@@ -1,0 +1,33 @@
+Icon/icon.swift
+  s_f86aa9fa11a3e8::t_9cc15e02007732 1-63
+build.sh
+  s_f86aa9fa11a3e8::t_d3bca961e5bb79 19-22,31
+Sources/Mail/ListView.swift
+  s_f86aa9fa11a3e8::t_c3fa3eab2309b0 4-30,32,36,39,47-49,51-52,55-56,71,82,87-95,99-107,110,114-120,125-128,131-142,144-149,152-161,166-181,188-191,210-212,223-230,232,236-238,241,244,247-248,251-252
+Sources/Mail/Chrome.swift
+  s_f86aa9fa11a3e8::t_dfb664bc30ed7b 151
+Sources/Mail/Sidebar.swift
+  s_f86aa9fa11a3e8::t_dfb664bc30ed7b 37,66,109,128
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_dfb664bc30ed7b 77
+Sources/Mail/Conversation.swift
+  s_f86aa9fa11a3e8::t_dfb664bc30ed7b 38,101-102,137
+Sources/Mail/FeedStream.swift
+  s_f86aa9fa11a3e8::t_dfb664bc30ed7b 49,87,133,135-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "afd54f6fca6f9c4bea14c64ccc52269c9639fd47",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
