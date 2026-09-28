@@ -35,7 +35,7 @@ enum Conversation {
         let anyImages = msgs.contains { !$0.blocked } && messages.contains(where: images)
         let payload = String(decoding: (try? JSONEncoder().encode(msgs)) ?? Data("[]".utf8), as: UTF8.self)
         let title = String(decoding: (try? JSONEncoder().encode([subject.isEmpty ? "(no subject)" : subject])) ?? Data("[\"\"]".utf8), as: UTF8.self)
-        let bg = dark ? "#1e1e1e" : "#ffffff"
+        let bg = Palette.css.bg
         WebRenderer.shared.blank(background: bg, images: anyImages) {
             WebRenderer.shared.view.evaluateJavaScript(script(dark: dark) + "render(\(title)[0], \(payload))") { _, e in
                 if let e { log("conversation js: \(e)") }
@@ -98,10 +98,8 @@ enum Conversation {
     }
 
     static func script(dark: Bool) -> String {
-        let fg = dark ? "#e8e8e8" : "#1d1d1f"
-        let dim = dark ? "#8e8e93" : "#86868b"
-        let line = dark ? "#333" : "#e5e5e5"
-        let link = dark ? "#6cb4ff" : "#0a66d8"
+        let c = Palette.css
+        let fg = c.fg, dim = c.dim, line = c.line, link = c.link
         return """
         function render(subject, msgs) {
           const css = document.createElement('style');
@@ -136,7 +134,7 @@ enum Conversation {
             const b = document.createElement('div'); b.className = 'body';
             const root = b.attachShadow({ mode: 'open' });
             const own = m.designed
-              ? ':host{display:block;background:#fff;color:#1d1d1f;border-radius:10px;padding:18px;overflow:hidden}'
+              ? ':host{display:block;background:#fffdf8;color:#1d1d1f;border-radius:10px;padding:18px;overflow:hidden}'
               : ':host{display:block;color:\(fg);overflow-wrap:anywhere} *{color:inherit!important;background:transparent!important;font-family:inherit!important} a{color:\(link)!important}';
             root.innerHTML = '<style>' + own +
               'img{max-width:100%;height:auto}table{max-width:100%!important}' +

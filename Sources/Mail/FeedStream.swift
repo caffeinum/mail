@@ -46,7 +46,7 @@ final class FeedStream: NSView {
         let html = Conversation.defuse(WebRenderer.stripPixels(html))
         let item = Item(id: "one", sender: "", subject: "", when: "", html: html, cached: true)
         let data = String(decoding: (try? JSONEncoder().encode([item])) ?? Data("[]".utf8), as: UTF8.self)
-        WebRenderer.shared.blank(background: "#ececec") {
+        WebRenderer.shared.blank(background: Palette.css.bg) {
             WebRenderer.shared.view.evaluateJavaScript(script + "render(\(data))") { _, e in if let e { log("card js: \(e)") } }
         }
     }
@@ -84,7 +84,7 @@ final class FeedStream: NSView {
         ids = newIDs
         cached = newCached
         self.images = images
-        WebRenderer.shared.blank(background: Conversation.dark ? "#1e1e1e" : "#ececec", images: images) { [weak self] in
+        WebRenderer.shared.blank(background: Palette.css.bg, images: images) { [weak self] in
             guard let self else { return }
             self.run(Self.script + "render(\(self.json(items))); go(\(index), false)")
         }
@@ -130,10 +130,10 @@ final class FeedStream: NSView {
       const css = document.createElement('style');
       css.textContent = `
         body { font: 14px -apple-system, sans-serif; padding: 18px 0 40vh; }
-        article { max-width: 760px; margin: 0 auto 22px; background: #fff; border-radius: 10px;
+        article { max-width: 760px; margin: 0 auto 22px; background: #fffdf8; border-radius: 10px;
                   box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden; border-left: 3px solid transparent; }
-        article.cur { border-left-color: #0a84ff; }
-        article header b::before { content: '● '; color: #0a84ff; font-size: 10px; vertical-align: 2px; }
+        article.cur { border-left-color: #f0561f; }
+        article header b::before { content: '● '; color: #f0561f; font-size: 10px; vertical-align: 2px; }
         article.read header b::before { content: ''; }
         article.read header { color: #86868b; }
         header { padding: 14px 22px 10px; border-bottom: 1px solid #eee; color: #1d1d1f; }

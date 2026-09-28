@@ -148,7 +148,7 @@ class Overlay: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.withAlphaComponent(0.45).cgColor
         card.wantsLayer = true
-        card.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        card.layer?.backgroundColor = Palette.background.cgColor
         card.layer?.cornerRadius = 12
         card.layer?.borderColor = NSColor.separatorColor.cgColor
         card.layer?.borderWidth = 1

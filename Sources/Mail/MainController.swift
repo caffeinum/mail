@@ -74,7 +74,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.router = { [weak self] e in self?.key(e) ?? false }
-        window.backgroundColor = .textBackgroundColor
+        window.backgroundColor = Palette.background
         // An empty unified toolbar makes the title bar 52pt tall, so the
         // traffic lights sit centred on the top bar, as in the mocks.
         let toolbar = NSToolbar(identifier: "main")

@@ -34,7 +34,7 @@ final class Sidebar: NSView {
 
     override var wantsUpdateLayer: Bool { true }
     override func updateLayer() {
-        layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.035).cgColor
+        layer?.backgroundColor = Palette.sidebar.cgColor
     }
 
     func update(boxes: [Mailbox], current: Mailbox?, view: View, counts: [View: Int]) {
@@ -63,7 +63,7 @@ final class Sidebar: NSView {
     private func heading(_ s: String) -> NSView {
         let t = NSTextField(labelWithString: s)
         t.font = .systemFont(ofSize: 10.5, weight: .medium)
-        t.textColor = .secondaryLabelColor
+        t.textColor = Palette.secondary
         let wrap = NSView()
         t.translatesAutoresizingMaskIntoConstraints = false
         wrap.addSubview(t)
@@ -106,7 +106,7 @@ final class SidebarItem: NSView {
             l.textColor = .white
             l.wantsLayer = true
             l.drawsBackground = true
-            l.backgroundColor = .controlAccentColor
+            l.backgroundColor = Palette.accent
             l.layer?.cornerRadius = 8
             l.layer?.masksToBounds = true
             right = l
@@ -125,7 +125,7 @@ final class SidebarItem: NSView {
     override var wantsUpdateLayer: Bool { true }
     override func updateLayer() {
         layer?.cornerRadius = 7
-        layer?.backgroundColor = on ? NSColor.labelColor.withAlphaComponent(0.08).cgColor : NSColor.clear.cgColor
+        layer?.backgroundColor = on ? Palette.line.cgColor : NSColor.clear.cgColor
     }
 
     override func mouseDown(with event: NSEvent) { action() }
