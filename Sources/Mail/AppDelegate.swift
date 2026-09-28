@@ -4,7 +4,6 @@ import MailCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var main: MainController!
     var engine: Engine!
-    var settings: SettingsWindow?
 
     /// The window goes up here, before AppKit finishes launching: the frame
     /// doesn't wait on the rest of the launch sequence.
@@ -68,12 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main?.saveState()
     }
 
-    @objc func openSettings(_ sender: Any?) {
-        if settings == nil {
-            settings = SettingsWindow(engine: engine) { [weak self] in self?.main.accountsChanged() }
-        }
-        settings?.show()
-    }
+    @objc func openSettings(_ sender: Any?) { main.showSettings() }
 
     private func buildMenu() {
         let bar = NSMenu()

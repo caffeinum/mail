@@ -1,139 +1,101 @@
 import AppKit
 import MailCore
 
-/// A plain-text message. The From line isn't editable: it's the account the
-/// thread lives in, or — for alias mail — the alias, with the relay doing
-/// the rewriting.
-final class ComposeWindow: NSObject, NSWindowDelegate {
+/// A new message, written in the main window in the same 720pt column as
+/// the reader. The From line isn't editable: it's the account, or — for an
+/// alias account — the alias, with the relay doing the rewriting.
+final class ComposeView: NSView {
     typealias Send = (OutgoingMessage, AliasRule?) -> Void
 
-    private let window: ComposePanel
     private let to = NSTextField()
     private let cc = NSTextField()
     private let subject = NSTextField()
-    private let body = NSTextView()
+    private let body = ReplyText()
+    private let hint = NSTextField(labelWithString: "⌘↩ send   ·   esc discard")
     private let box: Mailbox
-    private var base: OutgoingMessage
     private let alias: AliasRule?
-    private let send: Send
-    private static var open: [ComposeWindow] = []
+    var onSend: Send?
+    var onCancel: (() -> Void)?
 
-    init(box: Mailbox, mode: ReplyMode, thread: [MessageRecord], config: AccountsFile, send: @escaping Send) throws {
+    init(box: Mailbox) {
         self.box = box
-        self.send = send
-        let aliases = config.aliases(for: box.account)
-        if mode == .new {
-            base = OutgoingMessage(from: Address(email: box.account), to: [], subject: "", body: "")
-            alias = box.alias
-        } else {
-            base = try Composer.draft(mode, thread: thread, account: box.account, aliases: aliases)
-            alias = thread.lazy.compactMap { Composer.relay(for: $0, aliases: aliases)?.rule }.first
-        }
-        window = ComposePanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
-                              styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        super.init()
-        window.titlebarAppearsTransparent = true
-        window.title = mode == .new ? "New message" : (base.subject.isEmpty ? "Reply" : base.subject)
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        window.onSend = { [weak self] in self?.submit() }
-        window.onClose = { [weak self] in self?.window.close() }
-        build(mode: mode)
-    }
+        alias = box.alias
+        super.init(frame: .zero)
 
-    private func build(mode: ReplyMode) {
-        let fromText: String
-        if let alias { fromText = "\(alias.address)  (through \(alias.label) — your gmail address stays hidden)" }
-        else { fromText = box.account }
-        let from = NSTextField(labelWithString: fromText)
+        let title = NSTextField(labelWithString: "New message")
+        title.font = .systemFont(ofSize: 20, weight: .semibold)
+        let from = NSTextField(labelWithString: alias.map { "from \($0.address) — your gmail address stays hidden" } ?? "from \(box.account)")
         from.textColor = .secondaryLabelColor
         from.font = .systemFont(ofSize: 12)
-        func field(_ f: NSTextField, _ placeholder: String, _ value: String) {
-            f.placeholderString = placeholder
-            f.stringValue = value
+        for (f, p) in [(to, "To"), (cc, "Cc"), (subject, "Subject")] {
+            f.placeholderString = p
             f.isBordered = false
             f.drawsBackground = false
             f.focusRingType = .none
-            f.font = .systemFont(ofSize: 13)
+            f.font = .systemFont(ofSize: 14)
         }
-        field(to, "To", shownRecipients(base.to))
-        field(cc, "Cc", shownRecipients(base.cc))
-        field(subject, "Subject", base.subject)
-        body.string = base.body
         body.font = .systemFont(ofSize: 14)
         body.isRichText = false
+        body.drawsBackground = false
         body.isAutomaticQuoteSubstitutionEnabled = false
         body.allowsUndo = true
-        body.textContainerInset = NSSize(width: 4, height: 8)
+        body.textContainerInset = NSSize(width: 0, height: 8)
+        body.onSend = { [weak self] in self?.submit() }
+        body.onCancel = { [weak self] in self?.onCancel?() }
         let scroll = NSScrollView()
         scroll.documentView = body
-        scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
         body.autoresizingMask = [.width]
         body.isVerticallyResizable = true
-        let hint = NSTextField(labelWithString: "⌘↩ send  ·  esc discard")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .tertiaryLabelColor
 
-        let stack = NSStackView(views: [from, to, cc, subject, scroll, hint])
+        func rule() -> NSView {
+            let v = NSBox(); v.boxType = .separator; return v
+        }
+        let stack = NSStackView(views: [title, from, to, rule(), cc, rule(), subject, rule(), scroll, hint])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 40, left: 22, bottom: 14, right: 22)
-        for v in [to, cc, subject, scroll] { v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -44).isActive = true }
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        let width = stack.widthAnchor.constraint(equalToConstant: 720)
+        width.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 28),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -18),
+            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            width,
+            stack.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -48),
+        ])
+        for v in stack.arrangedSubviews where v !== title && v !== from && v !== hint {
+            v.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
-        window.contentView = stack
-        window.initialFirstResponder = mode == .new || mode == .forward ? to : body
     }
 
-    /// For an alias reply the relay addresses are what's really used; show
-    /// the person behind them so the field reads like normal mail.
-    private func shownRecipients(_ a: [Address]) -> String { a.header }
+    required init?(coder: NSCoder) { fatalError() }
 
-    func show() {
-        Self.open.append(self)
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        if window.initialFirstResponder === body { body.setSelectedRange(NSRange(location: 0, length: 0)) }
-    }
+    func focus() { window?.makeFirstResponder(to) }
 
-    private func submit() {
-        var m = base
-        m.to = Address.parseList(to.stringValue)
-        m.cc = Address.parseList(cc.stringValue)
-        m.subject = subject.stringValue
-        m.body = body.string
-        if let alias, base.inReplyTo == nil {
-            m = Composer.fromAlias(alias, account: box.account, to: m.to, cc: m.cc, subject: m.subject, body: m.body)
-        }
-        if let alias {
-            do { try AliasRelay(alias).verify(m, account: box.account) }
-            catch {
-                let a = NSAlert()
-                a.messageText = "Not sent"
-                a.informativeText = "\(error)"
-                a.beginSheetModal(for: window)
-                return
-            }
-        }
-        guard !m.to.isEmpty else { NSSound.beep(); window.makeFirstResponder(to); return }
-        send(m, alias)
-        window.close()
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        Self.open.removeAll { $0 === self }
-    }
-}
-
-final class ComposePanel: NSWindow {
-    var onSend: (() -> Void)?
-    var onClose: (() -> Void)?
+    override func cancelOperation(_ sender: Any?) { onCancel?() }
 
     override func performKeyEquivalent(with e: NSEvent) -> Bool {
-        if e.modifierFlags.contains(.command), e.keyCode == 36 || e.keyCode == 76 { onSend?(); return true }
+        if e.modifierFlags.contains(.command), e.keyCode == 36 || e.keyCode == 76 { submit(); return true }
         return super.performKeyEquivalent(with: e)
     }
 
-    override func cancelOperation(_ sender: Any?) { onClose?() }
+    private func submit() {
+        var m = OutgoingMessage(from: Address(email: box.account), to: Address.parseList(to.stringValue),
+                                cc: Address.parseList(cc.stringValue), subject: subject.stringValue, body: body.string)
+        guard !m.to.isEmpty else { NSSound.beep(); window?.makeFirstResponder(to); return }
+        if let alias {
+            m = Composer.fromAlias(alias, account: box.account, to: m.to, cc: m.cc, subject: m.subject, body: m.body)
+            do { try AliasRelay(alias).verify(m, account: box.account) }
+            catch { hint.stringValue = "Not sent — \(error)"; hint.textColor = .systemRed; return }
+        }
+        onSend?(m, alias)
+    }
 }

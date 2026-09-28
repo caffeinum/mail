@@ -2,26 +2,29 @@ import AppKit
 import SwiftUI
 import MailCore
 
-/// Accounts: add one gog already signed in, or sign in with google; give an
-/// account aliases that show as accounts of their own; turn on writes.
-final class SettingsWindow {
-    private let window: NSWindow
-    private let model: SettingsModel
+/// Accounts, shown in the main window: add one gog already signed in, or
+/// sign in with google; aliases show as accounts of their own; writes on.
+final class SettingsPane: NSView {
+    let model: SettingsModel
 
     init(engine: Engine, changed: @escaping () -> Void) {
         model = SettingsModel(engine: engine, changed: changed)
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
-                          styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-        window.title = "Accounts"
-        window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: SettingsView(model: model))
+        super.init(frame: .zero)
+        let host = NSHostingView(rootView: SettingsView(model: model))
+        host.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(host)
+        let width = host.widthAnchor.constraint(equalToConstant: 720)
+        width.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            host.topAnchor.constraint(equalTo: topAnchor, constant: 12), host.bottomAnchor.constraint(equalTo: bottomAnchor),
+            host.centerXAnchor.constraint(equalTo: centerXAnchor), width,
+            host.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -48),
+        ])
     }
 
-    func show() {
-        model.refresh()
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func refresh() { model.refresh() }
 }
 
 final class SettingsModel: ObservableObject {
@@ -123,8 +126,13 @@ struct SettingsView: SwiftUI.View {
 
     var body: some SwiftUI.View {
         VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Accounts").font(.title2.weight(.semibold))
+                Spacer()
+                Text("esc to go back").font(.caption).foregroundStyle(.secondary)
+            }
             if model.file.accounts.isEmpty {
-                Text("Add a gmail account to start.").font(.title3.weight(.semibold))
+                Text("Add a gmail account to start.").foregroundStyle(.secondary)
             }
             ForEach(model.file.accounts, id: \.email) { a in
                 VStack(alignment: .leading, spacing: 6) {
@@ -173,7 +181,6 @@ struct SettingsView: SwiftUI.View {
             if !model.status.isEmpty { Text(model.status).font(.caption) }
             Spacer()
         }
-        .padding(24)
-        .frame(minWidth: 520, minHeight: 420)
+        .padding(.vertical, 16)
     }
 }

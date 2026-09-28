@@ -47,6 +47,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     private(set) var view: View = .inbox
     private var lastTab: View = .inbox
     private var reading = false
+    /// Everything happens in this one window: a pane in place of the list
+    /// (a new message, accounts) or a card over it (help, ⌘K).
+    private var pane: NSView?
+    private var overlay: Overlay?
     private var pendingG = false
     private var errors: [String: String] = [:]
 
@@ -143,7 +147,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             return
         }
         list.set(store.threads(box, view, limit: 500), keep: id)
-        if streaming { showStream() } else if !reading { fill(content, with: list) }
+        if pane == nil { if streaming { showStream() } else if !reading { fill(content, with: list) } }
         var counts: [View: Int] = [:]
         for v in View.tabs { counts[v] = store.count(box, v) }
         header.update(boxes: boxes, current: box, view: view, counts: counts, note: errors[box.account])
@@ -312,22 +316,72 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             } catch { toast.show("\(error)") }
             return
         }
-        let msgs = thread.map { store.messages(account: $0.account, thread: $0.id) } ?? []
-        do {
-            let c = try ComposeWindow(box: box, mode: mode, thread: msgs, config: store.config) { [weak self] m, alias in
-                guard let self else { return }
-                do {
-                    try self.actions.send(account: box.account, m, alias: alias)
-                    let writes = self.store.config.writes(box.account)
-                    self.toast.show(writes ? "Sending in 10s  ·  z to undo" : "Saved as a draft in 10s (sending is off)  ·  z to undo")
-                } catch {
-                    self.toast.show("Not sent: \(error)")
-                }
+        let c = ComposeView(box: box)
+        c.onCancel = { [weak self] in self?.closePane() }
+        c.onSend = { [weak self] m, alias in
+            guard let self else { return }
+            do {
+                try self.actions.send(account: box.account, m, alias: alias)
+                self.closePane()
+                let writes = self.store.config.writes(box.account)
+                self.toast.show(writes ? "Sending in 10s  ·  z to undo" : "Saved as a draft in 10s (sending is off)  ·  z to undo")
+            } catch {
+                self.toast.show("Not sent: \(error)")
             }
-            c.show()
-        } catch {
-            toast.show("\(error)")
         }
+        openPane(c)
+        c.focus()
+    }
+
+    private func openPane(_ v: NSView) {
+        if reading { reader.closeReply() }
+        pane = v
+        fill(content, with: v)
+    }
+
+    func closePane() {
+        guard pane != nil else { return }
+        pane = nil
+        if reading, let t = reader.thread {
+            fill(content, with: reader)
+            reader.show(t, messages: store.messages(account: t.account, thread: t.id), force: true)
+        } else {
+            stream.invalidate()
+            reloadList(keep: list.selected?.id)
+            if !streaming { fill(content, with: list) }
+        }
+        window.makeFirstResponder(reading ? reader : list.table)
+    }
+
+    private lazy var settingsPane = SettingsPane(engine: engine) { [weak self] in self?.accountsChanged() }
+
+    func showSettings() {
+        closeOverlay()
+        settingsPane.refresh()
+        openPane(settingsPane)
+    }
+
+    private func showOverlay(_ o: Overlay) {
+        closeOverlay()
+        overlay = o
+        o.onClose = { [weak self] in self?.closeOverlay() }
+        o.show(in: window.contentView!)
+    }
+
+    func closeOverlay() {
+        overlay?.removeFromSuperview()
+        overlay = nil
+        if window.firstResponder == nil || window.firstResponder === window { window.makeFirstResponder(reading ? reader : list.table) }
+    }
+
+    func toggleHelp() {
+        if overlay is HelpOverlay { closeOverlay() } else { showOverlay(HelpOverlay()) }
+    }
+
+    func showPalette() {
+        let p = PaletteOverlay(for: self)
+        showOverlay(p)
+        p.focus()
     }
 
     private func loadImages(always: Bool) {
@@ -387,10 +441,18 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         }
         if mods == .command {
             switch ch {
-            case "k": Palette.shared.show(for: self); return true
+            case "k": showPalette(); return true
             case "r": engine.syncAll(); toast.show("Checking for new mail…"); return true
             default: return false
             }
+        }
+        if overlay != nil {
+            if e.keyCode == 53 || ch == "?" { closeOverlay(); return true }
+            return overlay is HelpOverlay
+        }
+        if pane != nil {
+            if e.keyCode == 53 { closePane(); return true }
+            return false
         }
         if e.keyCode == 48, mods.isEmpty { // tab: the next stream
             cycleStream(e.modifierFlags.contains(.shift) ? -1 : 1)
@@ -443,7 +505,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "i": loadImages(always: false)
         case "I": loadImages(always: true)
         case "/": startSearch()
-        case "?": Help.shared.toggle(over: window)
+        case "?": toggleHelp()
         case "c": compose(.new)
         case "r": compose(.reply)
         case "R": compose(.replyAll)

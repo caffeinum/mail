@@ -125,30 +125,59 @@ final class Toast: NSView {
     }
 }
 
-/// ? — every key on one sheet.
-final class Help {
-    static let shared = Help()
-    private var panel: NSPanel?
+/// Something laid over the main window — never a window of its own: a dim
+/// backdrop and a card in the middle. Clicking the backdrop closes it.
+class Overlay: NSView {
+    let card = NSView()
+    var onClose: (() -> Void)?
 
+    init(width: CGFloat, top: CGFloat? = nil) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.45).cgColor
+        card.wantsLayer = true
+        card.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        card.layer?.cornerRadius = 12
+        card.layer?.borderColor = NSColor.separatorColor.cgColor
+        card.layer?.borderWidth = 1
+        card.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(card)
+        var c = [card.centerXAnchor.constraint(equalTo: centerXAnchor), card.widthAnchor.constraint(equalToConstant: width)]
+        if let top { c.append(card.topAnchor.constraint(equalTo: topAnchor, constant: top)) }
+        else { c.append(card.centerYAnchor.constraint(equalTo: centerYAnchor)) }
+        NSLayoutConstraint.activate(c)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func mouseDown(with event: NSEvent) {
+        if !card.frame.contains(convert(event.locationInWindow, from: nil)) { onClose?() }
+    }
+
+    func show(in host: NSView) {
+        translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(self)
+        NSLayoutConstraint.activate([
+            topAnchor.constraint(equalTo: host.topAnchor), bottomAnchor.constraint(equalTo: host.bottomAnchor),
+            leadingAnchor.constraint(equalTo: host.leadingAnchor), trailingAnchor.constraint(equalTo: host.trailingAnchor),
+        ])
+    }
+}
+
+/// ? — every key on one card.
+final class HelpOverlay: Overlay {
     static let keys: [(String, String)] = [
         ("j / k", "next / previous"), ("g g / G", "top / bottom"), ("o / ↩", "open"), ("u / esc", "back"),
         ("e", "done (out of the inbox)"), ("#", "trash"), ("U", "read / unread"), ("z", "undo"),
-        ("/", "search"), ("⌘K", "command palette"), ("c", "compose"), ("r / R / F", "reply / reply all / forward"),
-        ("⌘↩", "send"), ("g i / g f / g p / g n", "inbox / feed / paper trail / new senders"),
-        ("1 2 3 …", "switch account"), ("a · f · p · x", "new sender: let in · feed · paper trail · block"),
-        ("space", "page down in a message"), ("⌘,", "accounts"), ("?", "this sheet"),
+        ("/", "search"), ("⌘K", "command palette"), ("c", "new message"), ("r / R / F", "reply / reply all / forward"),
+        ("⌘↩", "send"), ("tab / ⇧tab", "next / previous stream"), ("g i · g f · g p · g n", "inbox · feed · paper trail · new senders"),
+        ("⌃1 ⌃2 ⌃3", "switch account"), ("a · f · p · x", "new sender: let in · feed · paper trail · block"),
+        ("i / ⇧I", "images for this email / always from sender"), ("v", "feed as stream / list"),
+        ("space", "scroll"), ("⌘R", "check for mail"), ("⌘,", "accounts"), ("?", "this card"),
     ]
 
-    func toggle(over window: NSWindow) {
-        if let p = panel, p.isVisible { p.orderOut(nil); return }
-        let p = panel ?? make()
-        panel = p
-        let f = window.frame
-        p.setFrameOrigin(NSPoint(x: f.midX - p.frame.width / 2, y: f.midY - p.frame.height / 2))
-        p.makeKeyAndOrderFront(nil)
-    }
-
-    private func make() -> NSPanel {
+    init() {
+        super.init(width: 540)
         let grid = NSGridView(views: Self.keys.map { k, v in
             let a = NSTextField(labelWithString: k); a.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
             let b = NSTextField(labelWithString: v); b.font = .systemFont(ofSize: 13); b.textColor = .secondaryLabelColor
@@ -157,25 +186,12 @@ final class Help {
         grid.rowSpacing = 7
         grid.columnSpacing = 24
         grid.translatesAutoresizingMaskIntoConstraints = false
-        let p = HelpPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 520), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
-        p.titlebarAppearsTransparent = true
-        p.title = "Keys"
-        p.isReleasedWhenClosed = false
-        let host = NSView()
-        host.addSubview(grid)
+        card.addSubview(grid)
         NSLayoutConstraint.activate([
-            grid.topAnchor.constraint(equalTo: host.topAnchor, constant: 40), grid.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 32),
-            grid.trailingAnchor.constraint(lessThanOrEqualTo: host.trailingAnchor, constant: -32), grid.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -28),
+            grid.topAnchor.constraint(equalTo: card.topAnchor, constant: 24), grid.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 28),
+            grid.trailingAnchor.constraint(lessThanOrEqualTo: card.trailingAnchor, constant: -28), grid.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -24),
         ])
-        p.contentView = host
-        p.setContentSize(host.fittingSize)
-        return p
     }
-}
 
-final class HelpPanel: NSPanel {
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 || event.charactersIgnoringModifiers == "?" { orderOut(nil) } else { super.keyDown(with: event) }
-    }
-    override func cancelOperation(_ sender: Any?) { orderOut(nil) }
+    required init?(coder: NSCoder) { fatalError() }
 }
