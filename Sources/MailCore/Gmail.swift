@@ -78,18 +78,19 @@ actor Gate {
 public final class Gmail: @unchecked Sendable {
     public let account: String
     private let tokens: TokenProvider
-    private let session: URLSession
+    private lazy var session: URLSession = {
+        let cfg = URLSessionConfiguration.default
+        cfg.httpMaximumConnectionsPerHost = 12
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
+        cfg.urlCache = nil
+        return URLSession(configuration: cfg)
+    }()
     private let gate = Gate(12)
     private static let base = "https://gmail.googleapis.com/gmail/v1/users/me/"
 
     public init(account: String, tokens: TokenProvider = .shared) {
         self.account = account
         self.tokens = tokens
-        let cfg = URLSessionConfiguration.default
-        cfg.httpMaximumConnectionsPerHost = 12
-        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
-        cfg.urlCache = nil
-        session = URLSession(configuration: cfg)
     }
 
     private func request(_ method: String, _ path: String, query: [URLQueryItem] = [], body: Data? = nil) async throws -> Data {

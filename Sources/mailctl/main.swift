@@ -1,5 +1,6 @@
 import Foundation
 import MailCore
+import CoreGraphics
 
 // A terminal handle on the same cache and sync the app uses: for trying the
 // engine against real accounts (read-only unless writes are on) and for
@@ -21,6 +22,7 @@ func usage() -> Never {
     mailctl bodies <n> [view]                prefetch bodies for the top 50 threads
     mailctl outbox                           queued and recent changes
     mailctl idle <email>                     watch the imap doorbell for 2 minutes
+    mailctl launchbench <Post.app> [runs]    time from spawn until the window is on screen, seen from outside
     """)
     exit(2)
 }
@@ -161,6 +163,42 @@ case "idle":
     print("idling on \(e)'s inbox for 2 minutes…")
     try await Task.sleep(nanoseconds: 120_000_000_000)
     bell.stop()
+
+case "launchbench":
+    guard let app = args.first else { usage() }
+    let runs = args.count > 1 ? Int(args[1]) ?? 10 : 10
+    let exe = URL(fileURLWithPath: app).appendingPathComponent("Contents/MacOS/Post").path
+    var seen: [Double] = []
+    var reported: [Double] = []
+    for i in 0..<runs {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: exe)
+        var env = ProcessInfo.processInfo.environment
+        env["POST_BENCH"] = "1"; env["POST_BENCH_HOLD"] = "1"
+        p.environment = env
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        let t0 = DispatchTime.now()
+        try p.run()
+        let pid = p.processIdentifier
+        var onscreen: Double?
+        while p.isRunning, onscreen == nil {
+            let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+            if info.contains(where: { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && (($0[kCGWindowBounds as String] as? [String: Double])?["Height"] ?? 0) > 200 }) {
+                onscreen = Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds) / 1e6
+            }
+            usleep(500)
+        }
+        p.waitUntilExit()
+        let line = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let rep = line.split(separator: " ").first { $0.hasPrefix("first_frame_ms=") }.flatMap { Double($0.dropFirst(15)) } ?? -1
+        print(String(format: "run %d: on screen %.0fms (app reports %.0fms)", i + 1, onscreen ?? -1, rep))
+        if let onscreen { seen.append(onscreen) }; reported.append(rep)
+        usleep(300_000)
+    }
+    let s = seen.sorted()
+    if !s.isEmpty { print(String(format: "on screen: min %.0f  median %.0f  max %.0f ms  (n=%d)", s.first!, s[s.count / 2], s.last!, s.count)) }
 
 default: usage()
 }

@@ -80,7 +80,7 @@ public final class Actions {
         undo.append(e)
     }
 
-    func title(for category: String) -> String {
+    public func title(for category: String) -> String {
         switch category {
         case "feed": return "Moved to Feed"
         case "paper": return "Moved to Paper Trail"

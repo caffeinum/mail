@@ -5,7 +5,7 @@ import Foundation
 /// this guess.
 public enum Sorter {
     /// Bump when the rules change: the cache re-sorts every thread on open.
-    public static let version = 2
+    public static let version = 3
 
     static let paperWords = [
         "receipt", "invoice", "your order", "order confirm", "order #", "order no", "has shipped", "shipped",

@@ -245,7 +245,8 @@ public final class Store {
         let inbound = msgs.last { !mine.contains($0.shownFrom?.normalized ?? "") && !Composer.isSelfRelay($0.from, mine: mine) }
         let senderAddr = inbound?.shownFrom
         let senderEmail = senderAddr?.email.lowercased() ?? ""
-        let sender = senderAddr?.display ?? ("me → " + (last.to.first?.display ?? ""))
+        let firstTo = last.to.first
+        let sender = senderAddr?.display ?? (firstTo.map { mine.contains($0.normalized) ? "me" : "me → \($0.display)" } ?? "me")
 
         let feedID = labelID(account, name: Streams.feed)
         let paperID = labelID(account, name: Streams.paper)
