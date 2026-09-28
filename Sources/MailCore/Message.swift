@@ -1,0 +1,173 @@
+import Foundation
+
+public struct MessageRecord: Equatable {
+    public var account: String
+    public var id: String
+    public var threadID: String
+    public var historyID: Int64
+    public var date: Int64
+    public var labels: [String]
+    public var from: Address?
+    public var to: [Address]
+    public var cc: [Address]
+    public var replyTo: [Address]
+    public var subject: String
+    public var snippet: String
+    public var messageID: String?
+    public var inReplyTo: String?
+    public var references: [String]
+    public var listUnsubscribe: String?
+    public var listID: String?
+    public var precedence: String?
+    public var autoSubmitted: String?
+    public var duckFrom: Address?
+    public var duckTo: String?
+    public var bodyText: String?
+    public var bodyHTML: String?
+    public var hasBody: Bool
+
+    public init(account: String, id: String, threadID: String, historyID: Int64 = 0, date: Int64 = 0, labels: [String] = [],
+                from: Address? = nil, to: [Address] = [], cc: [Address] = [], replyTo: [Address] = [], subject: String = "",
+                snippet: String = "", messageID: String? = nil, inReplyTo: String? = nil, references: [String] = [],
+                listUnsubscribe: String? = nil, listID: String? = nil, precedence: String? = nil, autoSubmitted: String? = nil,
+                duckFrom: Address? = nil, duckTo: String? = nil, bodyText: String? = nil, bodyHTML: String? = nil, hasBody: Bool = false) {
+        self.account = account; self.id = id; self.threadID = threadID; self.historyID = historyID; self.date = date
+        self.labels = labels; self.from = from; self.to = to; self.cc = cc; self.replyTo = replyTo; self.subject = subject
+        self.snippet = snippet; self.messageID = messageID; self.inReplyTo = inReplyTo; self.references = references
+        self.listUnsubscribe = listUnsubscribe; self.listID = listID; self.precedence = precedence; self.autoSubmitted = autoSubmitted
+        self.duckFrom = duckFrom; self.duckTo = duckTo; self.bodyText = bodyText; self.bodyHTML = bodyHTML; self.hasBody = hasBody
+    }
+
+    /// Who the ui says it's from: the real sender behind a forwarding alias.
+    public var shownFrom: Address? { duckFrom ?? from }
+
+    public var isUnread: Bool { labels.contains("UNREAD") }
+
+    public init(account: String, gmail m: GmailMessage) {
+        let headers = m.payload?.headers ?? []
+        func h(_ n: String) -> String? {
+            headers.first { $0.name.caseInsensitiveCompare(n) == .orderedSame }.map { MIME.decodeHeader($0.value) }
+        }
+        self.init(account: account, id: m.id, threadID: m.threadId)
+        historyID = Int64(m.historyId ?? "") ?? 0
+        date = Int64(m.internalDate ?? "") ?? 0
+        labels = m.labelIds ?? []
+        from = h("From").flatMap(Address.parse)
+        to = h("To").map(Address.parseList) ?? []
+        cc = h("Cc").map(Address.parseList) ?? []
+        replyTo = h("Reply-To").map(Address.parseList) ?? []
+        subject = h("Subject") ?? ""
+        snippet = Self.unescape(m.snippet ?? "")
+        messageID = h("Message-ID") ?? h("Message-Id")
+        inReplyTo = h("In-Reply-To")
+        references = (h("References") ?? "").split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" || $0 == "\r" }).map(String.init)
+        listUnsubscribe = h("List-Unsubscribe")
+        listID = h("List-Id")
+        precedence = h("Precedence")
+        autoSubmitted = h("Auto-Submitted")
+        duckFrom = h("Duck-Original-From").flatMap(Address.parse)
+        duckTo = h("Duck-Original-To")?.trimmingCharacters(in: .whitespaces)
+        if let p = m.payload, p.parts != nil || p.body?.data != nil {
+            var text: String?, html: String?
+            Self.walk(p, text: &text, html: &html)
+            if text != nil || html != nil {
+                bodyText = text; bodyHTML = html; hasBody = true
+            } else if p.mimeType?.hasPrefix("multipart/") == true || p.body?.data != nil {
+                bodyText = ""; hasBody = true
+            }
+        }
+    }
+
+    static func charset(_ part: GmailPart) -> String {
+        let ct = part.headers?.first { $0.name.caseInsensitiveCompare("Content-Type") == .orderedSame }?.value ?? ""
+        guard let r = ct.range(of: "charset=", options: .caseInsensitive) else { return "utf-8" }
+        return ct[r.upperBound...].split(separator: ";").first.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\" ")) } ?? "utf-8"
+    }
+
+    static func walk(_ p: GmailPart, text: inout String?, html: inout String?) {
+        if let parts = p.parts {
+            for c in parts { walk(c, text: &text, html: &html) }
+            return
+        }
+        guard (p.filename ?? "").isEmpty, let data = p.body?.data, let bytes = MIME.base64URLDecode(data) else { return }
+        let decoded = String(data: bytes, encoding: MIME.encoding(charset(p))) ?? String(decoding: bytes, as: UTF8.self)
+        switch p.mimeType?.lowercased() {
+        case "text/plain": if text == nil { text = decoded }
+        case "text/html": if html == nil { html = decoded }
+        default: break
+        }
+    }
+
+    static func unescape(_ s: String) -> String {
+        guard s.contains("&") else { return s }
+        var out = s
+        for (k, v) in ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&nbsp;": " "] {
+            out = out.replacingOccurrences(of: k, with: v)
+        }
+        return out
+    }
+}
+
+public enum Category: String, CaseIterable {
+    case inbox, feed, paper
+}
+
+public enum View: Equatable, Hashable {
+    case inbox, feed, paper, newSenders
+    case search(String)
+
+    public var key: String {
+        switch self {
+        case .inbox: return "inbox"
+        case .feed: return "feed"
+        case .paper: return "paper"
+        case .newSenders: return "new"
+        case .search: return "search"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .inbox: return "Inbox"
+        case .feed: return "Feed"
+        case .paper: return "Paper Trail"
+        case .newSenders: return "New Senders"
+        case .search(let q): return "“\(q)”"
+        }
+    }
+
+    public static let tabs: [View] = [.inbox, .feed, .paper, .newSenders]
+
+    public init?(key: String) {
+        switch key {
+        case "inbox": self = .inbox
+        case "feed": self = .feed
+        case "paper": self = .paper
+        case "new": self = .newSenders
+        default: return nil
+        }
+    }
+}
+
+public struct ThreadSummary: Equatable, Hashable {
+    public let account: String
+    public let id: String
+    public let date: Int64
+    public let subject: String
+    public let snippet: String
+    public let sender: String
+    public let senderEmail: String
+    public let unread: Bool
+    public let count: Int
+    public let category: Category
+}
+
+/// The gmail label names the three streams map onto, so a phone shows the
+/// same sorting.
+public enum Streams {
+    public static let feed = "mail/feed"
+    public static let paper = "mail/paper-trail"
+    public static func label(_ c: Category) -> String? {
+        switch c { case .feed: return feed; case .paper: return paper; case .inbox: return nil }
+    }
+}
