@@ -25,11 +25,19 @@ public final class Store {
         }
     }
 
-    public static let schemaVersion = 2
+    public static let schemaVersion = 3
 
     private func migrate() throws {
         let v = try db.scalar("PRAGMA user_version")
         guard v < Self.schemaVersion else { return }
+        if v >= 1 && v < 3 {
+            // v3: Duck-Original-To kept as the bare alias address, not the raw header.
+            try db.transaction {
+                for (rowid, raw) in try db.query("SELECT rowid, duck_to FROM messages WHERE duck_to IS NOT NULL", map: { ($0.int64(0), $0.text(1)) }) {
+                    try db.run("UPDATE messages SET duck_to=? WHERE rowid=?", MessageRecord.forwardedTo(raw), rowid)
+                }
+            }
+        }
         if v == 1 {
             // v2: who each message is really from, indexed, so sorting can
             // follow the sender.
@@ -359,7 +367,7 @@ public final class Store {
     public func foundAliases(_ account: String, minimum: Int = 3) -> [String] {
         (try? db.query("""
             SELECT lower(duck_to) a, count(*) n FROM messages
-            WHERE account=? AND duck_to IS NOT NULL AND duck_to LIKE '%@%'
+            WHERE account=? AND duck_to LIKE '%_@duck.com'
             GROUP BY a HAVING n >= ? ORDER BY n DESC
             """, account, minimum) { $0.text(0) }) ?? []
     }

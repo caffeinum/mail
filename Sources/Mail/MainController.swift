@@ -23,6 +23,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     let window: KeyWindow
     let header = HeaderBar()
+    let sidebar = Sidebar()
+    private var sidebarWidth: NSLayoutConstraint!
     let list = ListView()
     lazy var reader = ThreadView()
     lazy var stream = FeedStream()
@@ -73,25 +75,41 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         window.isRestorable = false
         window.router = { [weak self] e in self?.key(e) ?? false }
         window.backgroundColor = .textBackgroundColor
+        // An empty unified toolbar makes the title bar 52pt tall, so the
+        // traffic lights sit centred on the top bar, as in the mocks.
+        let toolbar = NSToolbar(identifier: "main")
+        toolbar.showsBaselineSeparator = false
+        window.toolbar = toolbar
+        window.toolbarStyle = .unified
 
         let root = NSView()
         window.contentView = root
-        for v in [header, content, toast] as [NSView] {
+        for v in [sidebar, header, content, toast] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(v)
         }
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: root.topAnchor, constant: 28),
-            header.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            sidebar.topAnchor.constraint(equalTo: root.topAnchor),
+            sidebar.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            sidebar.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            header.topAnchor.constraint(equalTo: root.topAnchor),
+            header.leadingAnchor.constraint(equalTo: sidebar.trailingAnchor),
             header.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            header.heightAnchor.constraint(equalToConstant: 40),
+            header.heightAnchor.constraint(equalToConstant: 52),
             content.topAnchor.constraint(equalTo: header.bottomAnchor),
-            content.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            content.leadingAnchor.constraint(equalTo: sidebar.trailingAnchor),
             content.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             content.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             toast.centerXAnchor.constraint(equalTo: root.centerXAnchor),
             toast.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -18),
         ])
+        let shown = engine.store.get("ui.sidebar") != "hidden"
+        sidebarWidth = sidebar.widthAnchor.constraint(equalToConstant: shown ? Sidebar.width : 0)
+        sidebarWidth.isActive = true
+        sidebar.isHidden = !shown
+        header.sidebarShown = shown
+        sidebar.onAccount = { [weak self] i in self?.switchBox(i) }
+        sidebar.onStream = { [weak self] v in self?.go(v) }
         Launch.mark("layout")
         fill(content, with: list)
         header.searchDelegate = self
@@ -117,7 +135,24 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     /// Straight from disk: the last mailbox and stream, its first rows, one
     /// indexed read. No network is touched before this is on screen.
+    func setAppearance(_ mode: String) {
+        store.set("ui.appearance", mode)
+        applyAppearance()
+        stream.invalidate()
+        if reading, let t = reader.thread { reader.show(t, messages: reader.messages, force: true) }
+        else { reloadList(keep: list.selected?.id) }
+    }
+
+    private func applyAppearance() {
+        switch store.get("ui.appearance") {
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        default: NSApp.appearance = nil
+        }
+    }
+
     func showFirstFrame() {
+        applyAppearance()
         boxes = store.config.mailboxes
         let savedBox = store.get("ui.box")
         box = boxes.first { $0.id == savedBox } ?? boxes.first
@@ -151,6 +186,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         var counts: [View: Int] = [:]
         for v in View.tabs { counts[v] = store.count(box, v) }
         header.update(boxes: boxes, current: box, view: view, counts: counts, note: errors[box.account])
+        sidebar.update(boxes: boxes, current: box, view: view, counts: counts)
     }
 
     /// The feed opens unread-first, and keeps that order while you read —
@@ -471,6 +507,21 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         if backToList && reading { closeThread() }
     }
 
+    /// ⌘S, as in Arc: the sidebar slides away and the top bar takes over.
+    func toggleSidebar() {
+        let show = sidebarWidth.constant == 0
+        store.set("ui.sidebar", show ? "shown" : "hidden")
+        header.sidebarShown = show
+        if show { sidebar.isHidden = false }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.18
+            ctx.allowsImplicitAnimation = true
+            sidebarWidth.animator().constant = show ? Sidebar.width : 0
+            window.contentView?.layoutSubtreeIfNeeded()
+        }, completionHandler: { [weak self] in if !show { self?.sidebar.isHidden = true } })
+        reloadList(keep: list.selected?.id)
+    }
+
     func toggleHelp() {
         if overlay is HelpOverlay { closeOverlay() } else { showOverlay(HelpOverlay()) }
     }
@@ -540,6 +591,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             switch ch {
             case "k": showPalette(); return true
             case "r": engine.syncAll(); toast.show("Checking for new mail…"); return true
+            case "s": toggleSidebar(); return true
             default: return false
             }
         }

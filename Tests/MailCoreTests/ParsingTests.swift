@@ -69,3 +69,11 @@ import Foundation
         #expect(Store.ftsQuery("") == "")
     }
 }
+
+@Suite struct ForwardedTo {
+    @Test func aliasIsPickedOutOfTheHeader() {
+        #expect(MessageRecord.forwardedTo("Oleksii Bykhun <ALEKSB@duck.com>") == "aleksb@duck.com")
+        #expect(MessageRecord.forwardedTo("Herman <h@x.com>, aleksb@duck.com") == "aleksb@duck.com")
+        #expect(MessageRecord.forwardedTo("aleksb@duck.com") == "aleksb@duck.com")
+    }
+}

@@ -84,7 +84,7 @@ final class FeedStream: NSView {
         ids = newIDs
         cached = newCached
         self.images = images
-        WebRenderer.shared.blank(background: "#ececec", images: images) { [weak self] in
+        WebRenderer.shared.blank(background: Conversation.dark ? "#1e1e1e" : "#ececec", images: images) { [weak self] in
             guard let self else { return }
             self.run(Self.script + "render(\(self.json(items))); go(\(index), false)")
         }

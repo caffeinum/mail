@@ -66,7 +66,7 @@ public struct MessageRecord: Equatable {
         precedence = h("Precedence")
         autoSubmitted = h("Auto-Submitted")
         duckFrom = h("Duck-Original-From").flatMap(Address.parse)
-        duckTo = h("Duck-Original-To")?.trimmingCharacters(in: .whitespaces)
+        duckTo = h("Duck-Original-To").flatMap(Self.forwardedTo)
         if let p = m.payload, p.parts != nil || p.body?.data != nil {
             var text: String?, html: String?
             Self.walk(p, text: &text, html: &html)
@@ -76,6 +76,14 @@ public struct MessageRecord: Equatable {
                 bodyText = ""; hasBody = true
             }
         }
+    }
+
+    /// The alias a forwarded message was addressed to. The header can name
+    /// several people ("Ann <ann@x.com>, me@duck.com"); the relay's own
+    /// address is the one that counts.
+    public static func forwardedTo(_ raw: String) -> String? {
+        let emails = Address.parseList(raw).map(\.normalized)
+        return emails.first { $0.hasSuffix("@duck.com") } ?? emails.first
     }
 
     static func charset(_ part: GmailPart) -> String {
@@ -101,7 +109,7 @@ public struct MessageRecord: Equatable {
     static func unescape(_ s: String) -> String {
         guard s.contains("&") else { return s }
         var out = s
-        for (k, v) in ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&nbsp;": " "] {
+        for (k, v) in ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&apos;": "'", "&nbsp;": " "] {
             out = out.replacingOccurrences(of: k, with: v)
         }
         return out

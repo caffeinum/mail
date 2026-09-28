@@ -10,7 +10,7 @@ import Foundation
 /// decides the stream; only a request to act gets past it.
 public enum Sorter {
     /// Bump when the rules change: the cache re-sorts every thread on open.
-    public static let version = 6
+    public static let version = 7
 
     static let receiptWords = [
         "receipt", "invoice", "your order", "order confirm", "order #", "order no", "order number", "has shipped",

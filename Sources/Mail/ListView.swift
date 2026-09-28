@@ -8,6 +8,13 @@ enum Style {
     static let small = NSFont.systemFont(ofSize: 12)
     static let accent = NSColor.controlAccentColor
     static let gutter: CGFloat = 22
+    /// The list reads like the reader: a centred column, not edge to edge.
+    static let listWidth: CGFloat = 880
+
+    static func column(_ bounds: NSRect) -> NSRect {
+        let w = min(listWidth, bounds.width - 32)
+        return NSRect(x: (bounds.width - w) / 2, y: bounds.minY, width: w, height: bounds.height)
+    }
 }
 
 /// The thread list: a view-based NSTableView whose rows draw themselves in
@@ -24,7 +31,7 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
         col.resizingMask = .autoresizingMask
         table.addTableColumn(col)
         table.headerView = nil
-        table.rowHeight = Style.rowHeight
+        table.rowHeight = Style.rowHeight + 4
         table.intercellSpacing = .zero
         table.selectionHighlightStyle = .none
         table.allowsTypeSelect = false
@@ -39,6 +46,8 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
         hasVerticalScroller = true
         autohidesScrollers = true
         drawsBackground = false
+        automaticallyAdjustsContentInsets = false
+        contentInsets = NSEdgeInsets(top: 10, left: 0, bottom: 24, right: 0)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -81,10 +90,11 @@ final class CursorRow: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {}
     override func drawBackground(in dirtyRect: NSRect) {
         guard isSelected else { return }
-        NSColor.labelColor.withAlphaComponent(0.06).setFill()
-        bounds.fill()
+        let r = Style.column(bounds).insetBy(dx: 0, dy: 2)
+        NSColor.labelColor.withAlphaComponent(0.07).setFill()
+        NSBezierPath(roundedRect: r, xRadius: 8, yRadius: 8).fill()
         Style.accent.setFill()
-        NSRect(x: 0, y: 4, width: 3, height: bounds.height - 8).fill()
+        NSBezierPath(roundedRect: NSRect(x: r.minX, y: r.minY + 6, width: 3, height: r.height - 12), xRadius: 1.5, yRadius: 1.5).fill()
     }
     override var isSelected: Bool { didSet { needsDisplay = true } }
 }
@@ -108,20 +118,21 @@ final class ThreadRow: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let t = thread else { return }
         let h = bounds.height
+        let col = Style.column(bounds)
         let unread = t.unread
         let para = NSMutableParagraphStyle()
         para.lineBreakMode = .byTruncatingTail
 
         if unread {
             Style.accent.setFill()
-            NSBezierPath(ovalIn: NSRect(x: 9, y: h / 2 - 3, width: 6, height: 6)).fill()
+            NSBezierPath(ovalIn: NSRect(x: col.minX + 10, y: h / 2 - 3, width: 6, height: 6)).fill()
         }
-        let senderW: CGFloat = 190
+        let senderW: CGFloat = 170
         let dateW: CGFloat = 64
         let y = (h - 17) / 2
         var sender = t.sender
         if t.count > 1 { sender += "  \(t.count)" }
-        (sender as NSString).draw(with: NSRect(x: Style.gutter, y: y, width: senderW - 12, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [
+        (sender as NSString).draw(with: NSRect(x: col.minX + Style.gutter + 4, y: y, width: senderW - 12, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [
             .font: unread ? Style.bold : Style.body, .foregroundColor: NSColor.labelColor, .paragraphStyle: para,
         ])
         let line = NSMutableAttributedString(string: t.subject.isEmpty ? "(no subject)" : t.subject, attributes: [
@@ -131,11 +142,11 @@ final class ThreadRow: NSView {
             .font: Style.body, .foregroundColor: NSColor.secondaryLabelColor,
         ]))
         line.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: line.length))
-        let x = Style.gutter + senderW
-        line.draw(with: NSRect(x: x, y: y, width: bounds.width - x - dateW - 16, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        let x = col.minX + Style.gutter + 4 + senderW
+        line.draw(with: NSRect(x: x, y: y, width: col.maxX - x - dateW - 16, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
         let right = NSMutableParagraphStyle()
         right.alignment = .right
-        (Self.when(t.date) as NSString).draw(with: NSRect(x: bounds.width - dateW - 16, y: y + 1, width: dateW, height: 18), options: .usesLineFragmentOrigin, attributes: [
+        (Self.when(t.date) as NSString).draw(with: NSRect(x: col.maxX - dateW - 14, y: y + 1, width: dateW, height: 18), options: .usesLineFragmentOrigin, attributes: [
             .font: Style.small, .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: right,
         ])
     }

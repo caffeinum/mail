@@ -23,6 +23,11 @@ final class HeaderBar: NSView {
     private var bar = NSStackView()
     private var boxes: [Mailbox] = []
     let note = NSTextField(labelWithString: "")
+    /// With the sidebar showing, the bar only names where you are; hidden,
+    /// it carries the account and the streams itself.
+    let title = NSTextField(labelWithString: "")
+    var sidebarShown = true
+    private var leadInset: NSLayoutConstraint?
     var onTab: ((View) -> Void)?
     var onAccount: ((Int) -> Void)?
     private var tabViews: [View] = []
@@ -36,15 +41,18 @@ final class HeaderBar: NSView {
         tabs.spacing = 18
         note.font = .systemFont(ofSize: 11)
         note.textColor = .secondaryLabelColor
-        bar = NSStackView(views: [account, tabs, NSView(), note])
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        bar = NSStackView(views: [title, account, tabs, NSView(), note])
         bar.spacing = 20
-        bar.edgeInsets = NSEdgeInsets(top: 0, left: Style.gutter - 6, bottom: 0, right: Style.gutter)
+        bar.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: Style.gutter)
         bar.translatesAutoresizingMaskIntoConstraints = false
         addSubview(bar)
         NSLayoutConstraint.activate([
             bar.topAnchor.constraint(equalTo: topAnchor), bar.bottomAnchor.constraint(equalTo: bottomAnchor),
-            bar.leadingAnchor.constraint(equalTo: leadingAnchor), bar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bar.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
+        leadInset = bar.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 28)
+        leadInset?.isActive = true
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -52,7 +60,11 @@ final class HeaderBar: NSView {
     func update(boxes: [Mailbox], current: Mailbox?, view: View, counts: [View: Int], note text: String?) {
         self.boxes = boxes
         account.title = current.map { "\($0.title) ▾" } ?? ""
-        account.isHidden = boxes.isEmpty
+        account.isHidden = boxes.isEmpty || sidebarShown
+        tabs.isHidden = sidebarShown
+        title.isHidden = !sidebarShown
+        title.stringValue = view.title
+        leadInset?.constant = sidebarShown ? 28 : 84
         tabs.arrangedSubviews.forEach { $0.removeFromSuperview() }
         tabViews = View.tabs
         for (i, v) in View.tabs.enumerated() {
