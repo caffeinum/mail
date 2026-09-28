@@ -18,6 +18,10 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
         v.navigationDelegate = self
         v.setValue(false, forKey: "drawsBackground")
         v.allowsMagnification = true
+        // Emails with a dark-mode stylesheet would turn their text white
+        // inside our white cards; the page always answers "light" and the
+        // app picks its own theme.
+        v.appearance = NSAppearance(named: .aqua)
         return v
     }()
 
