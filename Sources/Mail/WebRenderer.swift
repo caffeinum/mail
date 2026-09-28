@@ -27,7 +27,10 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
 
     /// Loads a bare page under the same policy, then hands it to `then` to
     /// fill with app-side script (page script stays off).
+    private var last: (String, Bool, () -> Void)?
+
     func blank(background: String, images: Bool = false, then: @escaping () -> Void) {
+        last = (background, images, then)
         loaded = then
         allowImages(images)
         let doc = """
@@ -64,12 +67,16 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
         store?.compileContentRuleList(forIdentifier: "post.block-remote", encodedContentRuleList: "[\(block)]") { [weak self] list, _ in
             guard let self, let list else { return }
             self.blockAll = list
-            self.view.configuration.userContentController.add(list)
             self.ruled = true
+            self.allowImages(self.wantImages)
         }
         store?.compileContentRuleList(forIdentifier: "post.images-only", encodedContentRuleList: "[" + ([block, letImages] + tracks).joined(separator: ",") + "]") { [weak self] list, e in
             if let e { log("image rules: \(e)") }
-            self?.imagesOnly = list
+            guard let self else { return }
+            self.imagesOnly = list
+            // A page drawn before the rules were ready had its images held
+            // back; draw it again now that they can load.
+            if self.wantImages, let (bg, img, then) = self.last { self.blank(background: bg, images: img, then: then) }
         }
     }
 
@@ -78,7 +85,12 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
     }
     static let csp = csp(images: false)
 
+    /// What the page on screen asked for; rule lists compiled after it
+    /// loaded are applied to match, not over it.
+    private var wantImages = false
+
     private func allowImages(_ on: Bool) {
+        wantImages = on
         let ucc = view.configuration.userContentController
         ucc.removeAllContentRuleLists()
         if on, let imagesOnly { ucc.add(imagesOnly) } else if let blockAll { ucc.add(blockAll) }

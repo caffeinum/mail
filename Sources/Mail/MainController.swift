@@ -29,15 +29,15 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     /// Feed reads as a stream of the emails themselves; v flips to the list.
     private var streamMode = true
     private var streaming: Bool { view == .feed && streamMode && !reading }
-    /// Remote images: i lets them in for one thread (or the whole stream),
-    /// ⇧I for a sender from now on.
+    /// Remote images load, except in spam — there i lets them in for one
+    /// thread and ⇧I for a sender. Tracking pixels are gone either way.
     private var imageThreads = Set<String>()
     private var streamImages = false
 
     func trusts(_ account: String, _ email: String) -> Bool { store.get("img:\(account):\(email.lowercased())") == "1" }
 
     func imagesAllowed(_ m: MessageRecord) -> Bool {
-        imageThreads.contains(m.threadID) || trusts(m.account, m.shownFrom?.email ?? "")
+        !m.labels.contains("SPAM") || imageThreads.contains(m.threadID) || trusts(m.account, m.shownFrom?.email ?? "")
     }
     let toast = Toast()
     private let content = NSView()
