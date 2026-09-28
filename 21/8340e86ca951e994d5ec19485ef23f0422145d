@@ -1,0 +1,39 @@
+Sources/Mail/ThreadView.swift
+  s_f86aa9fa11a3e8::t_35152a17f7ede3 85
+  s_f86aa9fa11a3e8::t_97faf6b43fc230 79-84,86-90
+CLAUDE.md
+  s_f86aa9fa11a3e8::t_08e3dea37513b8 1,5,7,10
+Sources/MailCore/Accounts.swift
+  s_f86aa9fa11a3e8::t_d21cdf62ee9292 109-111,121,124-129
+Sources/Mail/AppDelegate.swift
+  s_f86aa9fa11a3e8::t_d21cdf62ee9292 22,77,81-82
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_d21cdf62ee9292 67,69-70
+  s_f86aa9fa11a3e8::t_97faf6b43fc230 318-333,337-339
+  s_f86aa9fa11a3e8::t_29aadffa924dcc 340
+build.sh
+  s_f86aa9fa11a3e8::t_d21cdf62ee9292 2,14,17,23-26
+Sources/mailctl/main.swift
+  s_f86aa9fa11a3e8::t_d21cdf62ee9292 25,170
+README.md
+  s_f86aa9fa11a3e8::t_08e3dea37513b8 1,23,26,38,42
+Sources/MailCore/Auth.swift
+  s_f86aa9fa11a3e8::t_d21cdf62ee9292 15,86,88,263
+  s_f86aa9fa11a3e8::t_c6715eab409c83 101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "218340e86ca951e994d5ec19485ef23f0422145d",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
