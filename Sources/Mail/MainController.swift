@@ -29,6 +29,16 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     /// Feed reads as a stream of the emails themselves; v flips to the list.
     private var streamMode = true
     private var streaming: Bool { view == .feed && streamMode && !reading }
+    /// Remote images: i lets them in for one thread (or the whole stream),
+    /// ⇧I for a sender from now on.
+    private var imageThreads = Set<String>()
+    private var streamImages = false
+
+    func trusts(_ account: String, _ email: String) -> Bool { store.get("img:\(account):\(email.lowercased())") == "1" }
+
+    func imagesAllowed(_ m: MessageRecord) -> Bool {
+        imageThreads.contains(m.threadID) || trusts(m.account, m.shownFrom?.email ?? "")
+    }
     let toast = Toast()
     private let content = NSView()
 
@@ -142,8 +152,11 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     private func showStream() {
         fill(content, with: stream)
         let rows = list.rows.prefix(40)
-        let items = rows.map { t in FeedStream.item(t, store.messages(account: t.account, thread: t.id).last) }
-        stream.show(Array(items), at: max(0, list.selectedIndex))
+        let items = rows.map { t -> FeedStream.Item in
+            let last = store.messages(account: t.account, thread: t.id).last
+            return FeedStream.item(t, last, images: streamImages || last.map(imagesAllowed) == true)
+        }
+        stream.show(Array(items), at: max(0, list.selectedIndex), images: streamImages || items.contains { !$0.html.contains("blocked-http") && WebRenderer.hasRemoteImages($0.html) })
     }
 
     // MARK: engine callbacks
@@ -213,6 +226,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         guard let t = list.selected else { return }
         stream.invalidate()
         reading = true
+        reader.images = { [weak self] m in self?.imagesAllowed(m) ?? false }
         fill(content, with: reader)
         reader.show(t, messages: store.messages(account: t.account, thread: t.id))
         if t.unread {
@@ -271,6 +285,24 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         guard let box else { return }
         let thread = list.selected
         if mode != .new, thread == nil { return }
+        if mode != .new, let t = thread {
+            if !reading { openSelected() }
+            do {
+                let r = try InlineReply(box: box, mode: mode, thread: store.messages(account: t.account, thread: t.id), config: store.config)
+                r.onCancel = { [weak self] in self?.reader.closeReply(); self?.window.makeFirstResponder(self?.reader) }
+                r.onSend = { [weak self] m, alias in
+                    guard let self else { return }
+                    do {
+                        try self.actions.send(account: box.account, m, alias: alias)
+                        self.reader.closeReply()
+                        let writes = self.store.config.writes(box.account)
+                        self.toast.show(writes ? "Sending in 10s  ·  z to undo" : "Saved as a draft in 10s (sending is off)  ·  z to undo")
+                    } catch { self.toast.show("Not sent: \(error)") }
+                }
+                reader.openReply(r)
+            } catch { toast.show("\(error)") }
+            return
+        }
         let msgs = thread.map { store.messages(account: $0.account, thread: $0.id) } ?? []
         do {
             let c = try ComposeWindow(box: box, mode: mode, thread: msgs, config: store.config) { [weak self] m, alias in
@@ -287,6 +319,25 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         } catch {
             toast.show("\(error)")
         }
+    }
+
+    private func loadImages(always: Bool) {
+        if streaming {
+            if always, let t = list.selected, !t.senderEmail.isEmpty { store.set("img:\(t.account):\(t.senderEmail)", "1") }
+            else { streamImages = true }
+            stream.invalidate()
+            showStream()
+            toast.show(always ? "Images on for this sender" : "Images on in the feed")
+            return
+        }
+        guard reading, let t = reader.thread else { return }
+        if always {
+            for e in Set(reader.messages.compactMap { $0.shownFrom?.email.lowercased() }) { store.set("img:\(t.account):\(e)", "1") }
+            toast.show("Images always on from \(t.sender)")
+        } else {
+            imageThreads.insert(t.id)
+        }
+        reader.show(t, messages: reader.messages, force: true)
     }
 
     // MARK: search
@@ -375,6 +426,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "#": act("Trashed") { try actions.trash($0) }
         case "U": act("Toggled unread") { try actions.toggleUnread($0[0]) }
         case "z": undo()
+        case "i": loadImages(always: false)
+        case "I": loadImages(always: true)
         case "/": startSearch()
         case "?": Help.shared.toggle(over: window)
         case "c": compose(.new)

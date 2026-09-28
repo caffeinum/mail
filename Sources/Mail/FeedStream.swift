@@ -42,6 +42,7 @@ final class FeedStream: NSView {
     /// One email as a card, for the thread view: same isolation and
     /// readable column as the stream, headers left to the native view.
     static func card(html: String) {
+        let html = Conversation.defuse(WebRenderer.stripPixels(html))
         let item = Item(id: "one", sender: "", subject: "", when: "", html: html, cached: true)
         let data = String(decoding: (try? JSONEncoder().encode([item])) ?? Data("[]".utf8), as: UTF8.self)
         WebRenderer.shared.blank(background: "#ececec") {
@@ -49,9 +50,12 @@ final class FeedStream: NSView {
         }
     }
 
-    static func item(_ t: ThreadSummary, _ m: MessageRecord?) -> Item {
+    static func item(_ t: ThreadSummary, _ m: MessageRecord?, images: Bool) -> Item {
         let html: String
-        if let h = m?.bodyHTML, !h.isEmpty { html = h }
+        if let raw = m?.bodyHTML, !raw.isEmpty {
+            let h = WebRenderer.stripPixels(raw)
+            html = images ? h : Conversation.defuse(h)
+        }
         else if let text = m?.bodyText, !text.isEmpty { html = "<pre>\(escape(text))</pre>" }
         else { html = "<p class=snip>\(escape(t.snippet))</p>" }
         return Item(id: t.id, sender: t.sender, subject: t.subject, when: ThreadRow.when(t.date), html: html, cached: m?.hasBody ?? false)
@@ -63,12 +67,14 @@ final class FeedStream: NSView {
 
     /// Draws the stream, or — when only some emails left it (done, trash) —
     /// takes those out in place so the scroll position holds.
-    func show(_ items: [Item], at index: Int) {
+    private var images = false
+
+    func show(_ items: [Item], at index: Int, images: Bool) {
         attach()
         let newIDs = items.map(\.id)
         let newCached = Set(items.filter(\.cached).map(\.id))
         if !ids.isEmpty, Set(newIDs).isSubset(of: Set(ids)), newIDs == ids.filter(Set(newIDs).contains),
-           newCached.isSubset(of: cached) {
+           newCached.isSubset(of: cached), images == self.images {
             let gone = ids.filter { !Set(newIDs).contains($0) }
             ids = newIDs
             if !gone.isEmpty { run("for (const id of \(json(gone))) document.getElementById('t'+id)?.remove(); mark(\(index))") }
@@ -76,7 +82,8 @@ final class FeedStream: NSView {
         }
         ids = newIDs
         cached = newCached
-        WebRenderer.shared.blank(background: "#ececec") { [weak self] in
+        self.images = images
+        WebRenderer.shared.blank(background: "#ececec", images: images) { [weak self] in
             guard let self else { return }
             self.run(Self.script + "render(\(self.json(items))); go(\(index), false)")
         }

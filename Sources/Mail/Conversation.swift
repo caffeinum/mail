@@ -18,28 +18,40 @@ enum Conversation {
         let designed: Bool
         let open: Bool
         let pending: Bool
+        let blocked: Bool
+    }
+
+    /// A message whose images stay off has every remote reference defused
+    /// in the markup, so the page may let images in for the others.
+    static func defuse(_ h: String) -> String {
+        h.replacingOccurrences(of: #"((?:src|background)\s*=\s*["']?|url\(\s*["']?)(https?:)"#, with: "$1blocked-$2",
+                               options: [.regularExpression, .caseInsensitive])
     }
 
     static var dark: Bool { NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
 
-    static func render(subject: String, messages: [MessageRecord], openIndex: Int) {
-        let msgs = messages.enumerated().map { i, m in msg(m, open: i == openIndex || i == messages.count - 1) }
+    static func render(subject: String, messages: [MessageRecord], openIndex: Int, images: (MessageRecord) -> Bool) {
+        let msgs = messages.enumerated().map { i, m in msg(m, open: i == openIndex || i == messages.count - 1, images: images(m)) }
+        let anyImages = msgs.contains { !$0.blocked } && messages.contains(where: images)
         let payload = String(decoding: (try? JSONEncoder().encode(msgs)) ?? Data("[]".utf8), as: UTF8.self)
         let title = String(decoding: (try? JSONEncoder().encode([subject.isEmpty ? "(no subject)" : subject])) ?? Data("[\"\"]".utf8), as: UTF8.self)
         let bg = dark ? "#1e1e1e" : "#ffffff"
-        WebRenderer.shared.blank(background: bg) {
+        WebRenderer.shared.blank(background: bg, images: anyImages) {
             WebRenderer.shared.view.evaluateJavaScript(script(dark: dark) + "render(\(title)[0], \(payload))") { _, e in
                 if let e { log("conversation js: \(e)") }
             }
         }
     }
 
-    static func msg(_ m: MessageRecord, open: Bool) -> Msg {
-        let html: String
+    static func msg(_ m: MessageRecord, open: Bool, images: Bool) -> Msg {
+        var html: String
         var designed = false
-        if let h = m.bodyHTML, !h.isEmpty {
-            html = h
+        var blocked = false
+        if let raw = m.bodyHTML, !raw.isEmpty {
+            let h = WebRenderer.stripPixels(raw)
             designed = isDesigned(h)
+            blocked = !images && WebRenderer.hasRemoteImages(h)
+            html = images ? h : defuse(h)
         } else if let t = m.bodyText, !t.isEmpty {
             html = plain(t)
         } else {
@@ -50,7 +62,7 @@ enum Conversation {
         return Msg(from: m.shownFrom?.display ?? "?", email: m.shownFrom?.email ?? "",
                    to: m.to.map(\.display).joined(separator: ", "),
                    when: f.string(from: Date(timeIntervalSince1970: TimeInterval(m.date) / 1000)),
-                   snippet: m.snippet, html: html, designed: designed, open: open, pending: !m.hasBody)
+                   snippet: m.snippet, html: html, designed: designed, open: open, pending: !m.hasBody, blocked: blocked)
     }
 
     /// Newsletters and receipts paint their own page; personal mail doesn't.
@@ -105,7 +117,8 @@ enum Conversation {
             details.m[open] .snip { visibility: hidden; }
             .when { color: \(dim); font-size: 12px; white-space: nowrap; margin-left: auto; }
             .to { color: \(dim); font-size: 13px; margin: 2px 0 12px; }
-            .body { margin-top: 6px; }`;
+            .body { margin-top: 6px; }
+            .imgs { color: \(dim); font-size: 12px; margin: -6px 0 10px; }`;
           document.head.appendChild(css);
           const main = document.createElement('main');
           const h = document.createElement('h1'); h.textContent = subject; main.appendChild(h);
@@ -118,6 +131,8 @@ enum Conversation {
             d.appendChild(s);
             const to = document.createElement('div'); to.className = 'to';
             to.textContent = m.email + (m.to ? '  →  ' + m.to : ''); d.appendChild(to);
+            if (m.blocked) { const n = document.createElement('div'); n.className = 'imgs';
+              n.textContent = 'Images blocked  ·  i to load  ·  ⇧I always from ' + m.from; d.appendChild(n); }
             const b = document.createElement('div'); b.className = 'body';
             const root = b.attachShadow({ mode: 'open' });
             const own = m.designed

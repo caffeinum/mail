@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import MailCore
 
 /// The one WKWebView in the app, made once and kept warm: WebKit is only
 /// here to draw html mail. No scripts, no remote loads — images, fonts,
@@ -26,11 +27,12 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
 
     /// Loads a bare page under the same policy, then hands it to `then` to
     /// fill with app-side script (page script stays off).
-    func blank(background: String, then: @escaping () -> Void) {
+    func blank(background: String, images: Bool = false, then: @escaping () -> Void) {
         loaded = then
+        allowImages(images)
         let doc = """
         <!doctype html><html><head><meta charset="utf-8">
-        <meta http-equiv="Content-Security-Policy" content="\(Self.csp)">
+        <meta http-equiv="Content-Security-Policy" content="\(Self.csp(images: images))">
         </head><body style="margin:0;background:\(background)"></body></html>
         """
         view.loadHTMLString(doc, baseURL: nil)
@@ -42,17 +44,56 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
         f?()
     }
 
+    private var blockAll: WKContentRuleList?
+    private var imagesOnly: WKContentRuleList?
+
+    /// Hosts and paths that exist to report an open. Blocked even when a
+    /// sender's images are let in.
+    static let trackers = ["open\\.", "/open", "/track", "pixel", "beacon", "doubleclick\\.net", "google-analytics\\.com",
+                           "mailtrack", "list-manage\\.com/track", "sendgrid\\.net/wf/open", "mandrillapp\\.com/track",
+                           "hubspot", "mixpanel", "sparkpost", "mailchimp\\.com/track", "/wf/open", "/e/o/", "emltrk", "trk\\."]
+
     func prewarm() {
         view.loadHTMLString("<!doctype html><html><body></body></html>", baseURL: nil)
-        let rules = #"[{"trigger":{"url-filter":"^https?:"},"action":{"type":"block"}}]"#
-        WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "post.block-remote", encodedContentRuleList: rules) { [weak self] list, _ in
+        let block = #"{"trigger":{"url-filter":"^https?:"},"action":{"type":"block"}}"#
+        let letImages = #"{"trigger":{"url-filter":"^https?:","resource-type":["image"]},"action":{"type":"ignore-previous-rules"}}"#
+        let tracks = Self.trackers.map { t in
+            #"{"trigger":{"url-filter":"\#(t.replacingOccurrences(of: "\\", with: "\\\\"))"},"action":{"type":"block"}}"#
+        }
+        let store = WKContentRuleListStore.default()
+        store?.compileContentRuleList(forIdentifier: "post.block-remote", encodedContentRuleList: "[\(block)]") { [weak self] list, _ in
             guard let self, let list else { return }
+            self.blockAll = list
             self.view.configuration.userContentController.add(list)
             self.ruled = true
         }
+        store?.compileContentRuleList(forIdentifier: "post.images-only", encodedContentRuleList: "[" + ([block, letImages] + tracks).joined(separator: ",") + "]") { [weak self] list, e in
+            if let e { log("image rules: \(e)") }
+            self?.imagesOnly = list
+        }
     }
 
-    static let csp = "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:; media-src 'none'; frame-src 'none'; form-action 'none'"
+    static func csp(images: Bool) -> String {
+        "default-src 'none'; img-src data: cid:\(images ? " https: http:" : ""); style-src 'unsafe-inline'; font-src data:; media-src 'none'; frame-src 'none'; form-action 'none'"
+    }
+    static let csp = csp(images: false)
+
+    private func allowImages(_ on: Bool) {
+        let ucc = view.configuration.userContentController
+        ucc.removeAllContentRuleLists()
+        if on, let imagesOnly { ucc.add(imagesOnly) } else if let blockAll { ucc.add(blockAll) }
+    }
+
+    /// Tracking pixels go before anything is drawn: any image sized 1×1 or 0.
+    static func stripPixels(_ html: String) -> String {
+        html.replacingOccurrences(of: #"<img[^>]*(width\s*=\s*["']?[01]["'\s>/]|height\s*=\s*["']?[01]["'\s>/])[^>]*>"#,
+                                  with: "", options: [.regularExpression, .caseInsensitive])
+    }
+
+    static func hasRemoteImages(_ html: String) -> Bool {
+        html.range(of: #"(src|background)\s*=\s*["']?https?:"#, options: [.regularExpression, .caseInsensitive]) != nil
+            || html.range(of: #"url\(\s*["']?https?:"#, options: [.regularExpression, .caseInsensitive]) != nil
+    }
 
     func render(html: String) {
         loaded = nil
