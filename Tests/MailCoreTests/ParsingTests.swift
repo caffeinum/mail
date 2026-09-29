@@ -96,3 +96,30 @@ import Foundation
         #expect(f.adopt(["a@gmail.com": ["aleksb@duck.com"]]) == ["aleksb@duck.com"])
     }
 }
+
+@Suite struct JevRequests {
+    @Test func bodyAsksOneChoicePerSenderWithZeroRetention() throws {
+        let b = Jev.body([Jev.Sample(email: "a@x.com", name: "Ann", lines: ["\"hi\""]), Jev.Sample(email: "r@stripe.com", name: "", lines: ["\"receipt\""])])
+        let q = b["questions"] as! [String: Any]
+        #expect(Set(q.keys) == ["s0", "s1"])
+        #expect(((q["s0"] as! [String: Any])["criteria"] as! [String: String]).keys.sorted() == ["feed", "inbox", "notify", "paper"])
+        #expect((b["state"] as! String).contains("[s1] r@stripe.com"))
+        #expect(((b["providerOptions"] as! [String: Any])["gateway"] as! [String: Any])["zeroDataRetention"] as! Bool)
+    }
+
+    @Test func answersMapBackToSenders() throws {
+        let data = Data(#"{"answers":{"s0":{"type":"choice","choice":"inbox","confidence":0.9},"s1":{"type":"choice","choice":"paper","confidence":1}}}"#.utf8)
+        let v = try Jev.parse(data, [Jev.Sample(email: "a@x.com", name: "", lines: []), Jev.Sample(email: "r@stripe.com", name: "", lines: [])])
+        #expect(v["a@x.com"] == Jev.Verdict(category: .inbox, confidence: 0.9))
+        #expect(v["r@stripe.com"]?.category == .paper)
+    }
+
+    @Test func verdictBeatsTheRules() throws {
+        let s = try tempStore()
+        try s.upsert([msg("1", thread: "a", from: "news@x.com", subject: "weekly digest", list: true)])
+        #expect(s.thread(account: gmail, id: "a")?.category == .feed)
+        try s.saveVerdicts(gmail, ["news@x.com": Jev.Verdict(category: .notify, confidence: 1)])
+        #expect(s.thread(account: gmail, id: "a")?.category == .notify)
+        #expect(s.sendersToJudge(gmail).isEmpty)
+    }
+}

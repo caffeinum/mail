@@ -25,7 +25,7 @@ public final class Store {
         }
     }
 
-    public static let schemaVersion = 5
+    public static let schemaVersion = 6
 
     private func migrate() throws {
         let v = try db.scalar("PRAGMA user_version")
@@ -83,6 +83,9 @@ public final class Store {
             attempts INTEGER NOT NULL DEFAULT 0, error TEXT, created INTEGER NOT NULL, result TEXT);
         CREATE INDEX IF NOT EXISTS outbox_pending ON outbox(state, not_before);
         CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS suggestions(
+            account TEXT NOT NULL, email TEXT NOT NULL, category TEXT NOT NULL, confidence REAL NOT NULL,
+            source TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(account, email));
         CREATE VIRTUAL TABLE IF NOT EXISTS msg_fts USING fts5(
             subject, people, body, tokenize = 'unicode61 remove_diacritics 2');
         PRAGMA user_version = \(Self.schemaVersion);
@@ -238,10 +241,16 @@ public final class Store {
 
     private var senderCategories: [String: Category] = [:]
 
-    /// The stream a sender's mail goes to, judged on everything they've sent.
+    /// The stream a sender's mail goes to: Jev's verdict when there is one,
+    /// otherwise the hand-written rules over everything they've sent.
     func senderCategory(account: String, email: String) -> Category {
         let key = account + "\u{1}" + email
         if let c = senderCategories[key] { return c }
+        if let judged = try? db.string("SELECT category FROM suggestions WHERE account=? AND email=?", account, email),
+           let c = Category(rawValue: judged) {
+            senderCategories[key] = c
+            return c
+        }
         let msgs = (try? db.query("""
             SELECT labels, subject, snippet, list_unsubscribe, list_id, precedence, auto_submitted, from_json, duck_from_json
             FROM messages WHERE account=? AND sender=? ORDER BY date DESC LIMIT 50
@@ -383,6 +392,49 @@ public final class Store {
             WHERE account=? AND duck_to LIKE '%_@duck.com' AND instr(duck_to, '_at_') = 0
             GROUP BY a HAVING n >= ? ORDER BY n DESC
             """, account, minimum) { $0.text(0) }) ?? []
+    }
+
+    // MARK: jev
+
+    /// Senders nobody has placed and Jev hasn't judged, newest first, each
+    /// with a few recent subjects and previews — never bodies.
+    public func sendersToJudge(_ account: String, limit: Int = 100) -> [Jev.Sample] {
+        let emails = (try? db.query("""
+            SELECT t.sender_email, t.sender FROM threads t
+            WHERE t.account=? AND t.sender_email<>'' AND t.view='new'
+              AND NOT EXISTS (SELECT 1 FROM suggestions s WHERE s.account=t.account AND s.email=t.sender_email)
+            GROUP BY t.sender_email ORDER BY max(t.date) DESC LIMIT ?
+            """, account, limit) { ($0.text(0), $0.text(1)) }) ?? []
+        return emails.map { email, name in
+            let lines = (try? db.query("""
+                SELECT subject, snippet FROM messages WHERE account=? AND sender=? ORDER BY date DESC LIMIT 3
+                """, account, email) { r -> String in
+                let snip = r.text(1).prefix(90)
+                return "\"\(r.text(0))\"" + (snip.isEmpty ? "" : " — \(snip)")
+            }) ?? []
+            return Jev.Sample(email: email, name: name, lines: lines)
+        }
+    }
+
+    public func saveVerdicts(_ account: String, _ verdicts: [String: Jev.Verdict]) throws {
+        guard !verdicts.isEmpty else { return }
+        let now = Int64(Date().timeIntervalSince1970)
+        try db.transaction {
+            for (email, v) in verdicts {
+                try db.run("""
+                    INSERT INTO suggestions(account,email,category,confidence,source,at) VALUES(?,?,?,?,'jev',?)
+                    ON CONFLICT(account,email) DO UPDATE SET category=excluded.category, confidence=excluded.confidence,
+                        source=excluded.source, at=excluded.at
+                    """, account, email, v.category.rawValue, v.confidence, now)
+            }
+            let ids = try db.query("SELECT id FROM threads WHERE account=? AND sender_email IN (\(verdicts.keys.map { _ in "?" }.joined(separator: ",")))",
+                                   [account] + verdicts.keys.map { $0 as SQLBindable }) { $0.text(0) }
+            try recompute(Set(ids.map { account + "\u{1}" + $0 }))
+        }
+    }
+
+    public func judgedCount(_ account: String) -> Int {
+        (try? db.scalar("SELECT count(*) FROM suggestions WHERE account=? AND source='jev'", account)) ?? 0
     }
 
     // MARK: search

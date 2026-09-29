@@ -22,6 +22,7 @@ func usage() -> Never {
     mailctl bodies <n> [view]                prefetch bodies for the top 50 threads
     mailctl outbox                           queued and recent changes
     mailctl idle <email>                     watch the imap doorbell for 2 minutes
+    mailctl judge [email]                    have Jev place the senders waiting in New Senders
     mailctl demo                             fill POST_HOME with made-up mail, for screenshots
     mailctl launchbench <Reply.app> [runs]    time from spawn until the window is on screen, seen from outside
     """)
@@ -164,6 +165,17 @@ case "idle":
     print("idling on \(e)'s inbox for 2 minutes…")
     try await Task.sleep(nanoseconds: 120_000_000_000)
     bell.stop()
+
+case "judge":
+    for a in args.first.map({ [$0] }) ?? config.accounts.map(\.email) {
+        let samples = store.sendersToJudge(a, limit: 500)
+        let t = DispatchTime.now()
+        let v = try await Jev.classify(samples)
+        try store.saveVerdicts(a, v)
+        var n: [String: Int] = [:]
+        for x in v.values { n[x.category.rawValue, default: 0] += 1 }
+        print("\(a): \(v.count)/\(samples.count) judged in \(ms(t)) — \(n.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))")
+    }
 
 case "demo":
     guard ProcessInfo.processInfo.environment["POST_HOME"] != nil else { fail("set POST_HOME to an empty folder first — demo never touches your real cache") }

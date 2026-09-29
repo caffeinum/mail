@@ -44,7 +44,7 @@ public final class Engine: @unchecked Sendable {
             guard let self, let due = self.outbox.nextDue(), due <= Date() else { return }
             Task { await self.runner.drain() }
         }
-        for a in store.config.accounts { ring(a.email) }
+        for a in store.config.accounts { ring(a.email); Task { await judge(a.email) } }
     }
 
     public func stop() {
@@ -69,11 +69,34 @@ public final class Engine: @unchecked Sendable {
                             self.onChange?(account)
                         }
                     }
+                    await self.judge(account)
                 }
             } catch {
                 log("\(account): sync failed: \(error)")
                 DispatchQueue.main.async { self.onError?(account, error) }
             }
+        }
+    }
+
+    private var judging = Set<String>()
+
+    /// New senders get Jev's verdict in the background; the list redraws when
+    /// it lands. Without a key, or offline, the hand-written rules stand.
+    public func judge(_ account: String) async {
+        guard Jev.key != nil else { return }
+        let start: Bool = await MainActor.run { judging.insert(account).inserted }
+        guard start else { return }
+        defer { Task { @MainActor in self.judging.remove(account) } }
+        let samples = store.sendersToJudge(account)
+        guard !samples.isEmpty else { return }
+        do {
+            let t = Date()
+            let verdicts = try await Jev.classify(samples)
+            try store.saveVerdicts(account, verdicts)
+            log("\(account): jev placed \(verdicts.count)/\(samples.count) new senders in \(Int(Date().timeIntervalSince(t) * 1000))ms")
+            DispatchQueue.main.async { self.onChange?(account) }
+        } catch {
+            log("\(account): jev failed, keeping the rule-based suggestions: \(error)")
         }
     }
 
