@@ -37,8 +37,7 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         #expect(Set(s.threads(box, .newSenders).map(\.id)) == ["a", "b", "c"])
         #expect(s.threads(duckBox, .newSenders).map(\.id) == ["d"])
         #expect(s.threads(box, .inbox).isEmpty)
-        #expect(s.thread(account: gmail, id: "b")?.category == .feed)
-        #expect(s.thread(account: gmail, id: "c")?.category == .paper)
+        #expect(s.thread(account: gmail, id: "b")?.category == nil)   // no verdict, no guess
         try place(s, [("ann@x.com", "inbox"), ("news@substack.com", "feed"), ("shop@y.com", "paper"), ("bob@z.com", "inbox")])
         #expect(s.threads(box, .inbox).map(\.id) == ["a"])
         #expect(s.threads(box, .feed).map(\.id) == ["b"])
@@ -59,16 +58,6 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         try s.upsert([msg("3", thread: "c", from: "notifications@vercel.com", subject: "Action required: update your payment method",
                           labels: ["INBOX", "CATEGORY_UPDATES"], date: 9)])
         #expect(Set(s.threads(box, .paper).map(\.id)) == ["a", "c"])
-    }
-
-    @Test func sortingFollowsTheSender() throws {
-        let s = try tempStore()
-        try s.upsert([
-            msg("1", thread: "a", from: "orders@shop.com", subject: "Your receipt", labels: ["INBOX", "CATEGORY_UPDATES"], date: 1),
-            msg("2", thread: "b", from: "orders@shop.com", subject: "Fall collection is here", labels: ["INBOX", "CATEGORY_PROMOTIONS"], date: 2),
-        ])
-        #expect(s.thread(account: gmail, id: "a")?.category == .paper)
-        #expect(s.thread(account: gmail, id: "b")?.category == .paper)
     }
 
     @Test func newSenderWaitsUntilDecided() throws {

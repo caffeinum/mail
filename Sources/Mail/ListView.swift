@@ -260,7 +260,7 @@ final class ThreadRow: NSView {
                 .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), .foregroundColor: Palette.secondary, .paragraphStyle: para,
             ])
         }
-        if suggest, let tag = Self.suggestion[t.category.rawValue] {
+        if suggest, let c = t.category, let tag = Self.suggestion[c.rawValue] {
             dateW += 124
             (tag as NSString).draw(with: NSRect(x: col.maxX - dateW + 4, y: y + 1, width: 120, height: 18), options: .usesLineFragmentOrigin, attributes: [
                 .font: NSFont.monospacedSystemFont(ofSize: 11.5, weight: .medium), .foregroundColor: Palette.accent,

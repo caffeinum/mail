@@ -13,9 +13,9 @@ public final class Store {
         db = try Database(path: path)
         self.config = config
         try migrate()
-        if get("sorter") != String(Sorter.version) {
+        if get("sorter") != String(Self.sortingVersion) {
             try recomputeAll()
-            set("sorter", String(Sorter.version))
+            set("sorter", String(Self.sortingVersion))
         }
     }
 
@@ -26,6 +26,8 @@ public final class Store {
     }
 
     public static let schemaVersion = 6
+    /// Bump when how threads are placed changes: the cache re-sorts on open.
+    public static let sortingVersion = 12
 
     private func migrate() throws {
         let v = try db.scalar("PRAGMA user_version")
@@ -239,34 +241,12 @@ public final class Store {
         try db.transaction { try recompute(Set(threads.map { account + "\u{1}" + $0 })) }
     }
 
-    private var senderCategories: [String: Category] = [:]
-
-    /// The stream a sender's mail goes to: Jev's verdict when there is one,
-    /// otherwise the hand-written rules over everything they've sent.
-    func senderCategory(account: String, email: String) -> Category {
-        let key = account + "\u{1}" + email
-        if let c = senderCategories[key] { return c }
-        if let judged = try? db.string("SELECT category FROM suggestions WHERE account=? AND email=?", account, email),
-           let c = Category(rawValue: judged) {
-            senderCategories[key] = c
-            return c
-        }
-        let msgs = (try? db.query("""
-            SELECT labels, subject, snippet, list_unsubscribe, list_id, precedence, auto_submitted, from_json, duck_from_json
-            FROM messages WHERE account=? AND sender=? ORDER BY date DESC LIMIT 50
-            """, account, email) { r in
-            MessageRecord(account: account, id: "", threadID: "", labels: Self.labelList(r.text(0)),
-                          from: unjson(r.string(7), Address.self), subject: r.text(1), snippet: r.text(2),
-                          listUnsubscribe: r.string(3), listID: r.string(4), precedence: r.string(5), autoSubmitted: r.string(6),
-                          duckFrom: unjson(r.string(8), Address.self))
-        }) ?? []
-        let c = Sorter.category(of: msgs)
-        senderCategories[key] = c
-        return c
+    /// Jev's verdict for a sender, if it has answered. No verdict, no guess.
+    func verdict(account: String, email: String) -> Category? {
+        (try? db.string("SELECT category FROM suggestions WHERE account=? AND email=?", account, email)).flatMap { $0.flatMap(Category.init(rawValue:)) }
     }
 
     private func recompute(_ keys: Set<String>) throws {
-        senderCategories.removeAll()
         for key in keys {
             let parts = key.split(separator: "\u{1}", maxSplits: 1).map(String.init)
             try recomputeThread(account: parts[0], id: parts[1])
@@ -297,7 +277,7 @@ public final class Store {
         let feedID = labelID(account, name: Streams.feed)
         let paperID = labelID(account, name: Streams.paper)
         let decided = senderEmail.isEmpty ? nil : decision(account: account, email: senderEmail)
-        var category: Category
+        var category: Category?
         let notifyID = labelID(account, name: Streams.notifications)
         let labelledStream = (feedID.map(union.contains) ?? false) || (paperID.map(union.contains) ?? false)
             || (notifyID.map(union.contains) ?? false)
@@ -305,8 +285,8 @@ public final class Store {
         else if let notifyID, union.contains(notifyID) { category = .notify }
         else if let paperID, union.contains(paperID) { category = .paper }
         else if let d = decided, let c = Category(rawValue: d) { category = c }
-        else if inbound != nil, !senderEmail.isEmpty { category = senderCategory(account: account, email: senderEmail) }
-        else { category = Sorter.guess(last) }
+        else if inbound != nil, !senderEmail.isEmpty { category = verdict(account: account, email: senderEmail) }
+        else { category = .inbox }   // only our own mail in the thread
 
         // Every sender waits in New Senders until placed — unless gmail
         // already files them (mail/feed, mail/paper-trail labels).
@@ -324,7 +304,7 @@ public final class Store {
         else if decided == "muted" || (mutedID.map(union.contains) ?? false) { view = "muted" }
         else if pending && inInbox { view = "new" }
         else if category == .inbox && inInbox { view = "inbox" }
-        else if category != .inbox && (inInbox || labelled) { view = category.rawValue }
+        else if let category, category != .inbox, inInbox || labelled { view = category.rawValue }
 
         try db.run("""
             INSERT INTO threads(account,id,alias,view,category,date,subject,snippet,sender,sender_email,unread,count,labels,has_body)
@@ -333,7 +313,7 @@ public final class Store {
                 date=excluded.date, subject=excluded.subject, snippet=excluded.snippet, sender=excluded.sender,
                 sender_email=excluded.sender_email, unread=excluded.unread, count=excluded.count, labels=excluded.labels,
                 has_body=excluded.has_body
-            """, [account, id, alias, view, category.rawValue, last.date, msgs.first?.subject ?? "", last.snippet, sender,
+            """, [account, id, alias, view, category?.rawValue ?? "", last.date, msgs.first?.subject ?? "", last.snippet, sender,
                   senderEmail, union.contains("UNREAD"), msgs.count, Self.labelText(Array(union).sorted()),
                   msgs.allSatisfy(\.hasBody)])
     }
@@ -341,7 +321,7 @@ public final class Store {
     private func summary(_ r: Row) -> ThreadSummary {
         ThreadSummary(account: r.text(0), id: r.text(1), date: r.int64(2), subject: r.text(3), snippet: r.text(4),
                       sender: r.text(5), senderEmail: r.text(6), unread: r.bool(7), count: r.int(8),
-                      category: Category(rawValue: r.text(9)) ?? .inbox, alias: r.text(10))
+                      category: Category(rawValue: r.text(9)), alias: r.text(10))
     }
 
     private static let cols = "account,id,date,subject,snippet,sender,sender_email,unread,count,category,alias"

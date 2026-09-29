@@ -185,7 +185,8 @@ public struct ThreadSummary: Equatable, Hashable {
     public let senderEmail: String
     public let unread: Bool
     public let count: Int
-    public let category: Category
+    /// The stream it goes to — nil while a new sender has no verdict yet.
+    public let category: Category?
     /// The alias the thread came in through, or "" for the gmail account itself.
     public let alias: String
 }

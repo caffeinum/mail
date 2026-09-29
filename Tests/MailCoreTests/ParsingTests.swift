@@ -30,7 +30,6 @@ import Foundation
         #expect(m.bodyHTML == "<p>Hi <b>there</b></p>")
         #expect(m.snippet == "Hi & there")
         #expect(m.isUnread && m.hasBody && m.historyID == 42)
-        #expect(Sorter.guess(m) == .feed)
     }
 
     @Test func outgoingMime() {
@@ -41,31 +40,6 @@ import Foundation
         #expect(raw.contains("In-Reply-To: <p@x>\r\nReferences: <o@x> <p@x>"))
         let body = raw.components(separatedBy: "\r\n\r\n")[1].replacingOccurrences(of: "\r\n", with: "")
         #expect(String(decoding: Data(base64Encoded: body)!, as: UTF8.self) == "line1\r\nline2")
-    }
-
-    @Test func sorting() {
-        func m(_ from: String, _ subject: String, _ labels: [String] = [], list: Bool = false) -> MessageRecord {
-            MessageRecord(account: "a", id: "1", threadID: "t", labels: labels, from: Address(email: from), subject: subject,
-                          listUnsubscribe: list ? "<x>" : nil)
-        }
-        #expect(Sorter.guess(m("noreply@shop.com", "Your order has shipped", ["CATEGORY_UPDATES"])) == .paper)
-        #expect(Sorter.guess(m("receipts@stripe.com", "Your receipt from Acme")) == .paper)
-        #expect(Sorter.guess(m("news@substack.com", "This week in AI", list: true)) == .feed)
-        #expect(Sorter.guess(m("deals@shop.com", "50% off", ["CATEGORY_PROMOTIONS"])) == .feed)
-        #expect(Sorter.guess(m("friend@gmail.com", "dinner? I paid last time")) == .inbox)
-        #expect(Sorter.guess(m("notifications@vercel.com", "Preview deployment failed", ["CATEGORY_UPDATES"])) == .notify)
-        #expect(Sorter.guess(m("security@github.com", "New sign-in to your account", ["CATEGORY_UPDATES"])) == .notify)
-        #expect(Sorter.guess(m("billing@lime.com", "Update your payment method", ["CATEGORY_UPDATES"])) == .notify)
-        #expect(Sorter.guess(m("team@sanity.io", "7 days left of trial", ["CATEGORY_UPDATES"], list: true)) == .notify)
-        #expect(Sorter.guess(m("hello@linear.app", "Introducing Linear Agents", ["CATEGORY_UPDATES"])) == .feed)
-        #expect(Sorter.guess(m("team@typesafe.ai", "Still interested? We miss you", ["CATEGORY_UPDATES"])) == .feed)
-        #expect(Sorter.guess(m("calendar@lu.ma", "You are invited to Demo Day", ["CATEGORY_UPDATES"])) == .feed)
-        #expect(Sorter.guess(m("no-reply@brex.com", "BREX INC. withdrew money from your account", ["CATEGORY_UPDATES"])) == .paper)
-        #expect(Sorter.guess(m("hello@thecommons.org", "Public Events Bulletin", ["CATEGORY_UPDATES"], list: true)) == .feed)
-        #expect(Sorter.isRobot(m("notifications@vercel.com", "x")) && !Sorter.isRobot(m("friend@gmail.com", "x")))
-        let store = [m("orders@shop.com", "Your order has shipped"), m("orders@shop.com", "Big sale", ["CATEGORY_PROMOTIONS"]),
-                     m("orders@shop.com", "New arrivals", ["CATEGORY_PROMOTIONS"])]
-        #expect(Sorter.category(of: store) == .paper)
     }
 
     @Test func ftsQuery() {
@@ -114,10 +88,10 @@ import Foundation
         #expect(v["r@stripe.com"]?.category == .paper)
     }
 
-    @Test func verdictBeatsTheRules() throws {
+    @Test func onlyJevSuggests() throws {
         let s = try tempStore()
         try s.upsert([msg("1", thread: "a", from: "news@x.com", subject: "weekly digest", list: true)])
-        #expect(s.thread(account: gmail, id: "a")?.category == .feed)
+        #expect(s.thread(account: gmail, id: "a")?.category == nil)
         try s.saveVerdicts(gmail, ["news@x.com": Jev.Verdict(category: .notify, confidence: 1)])
         #expect(s.thread(account: gmail, id: "a")?.category == .notify)
         #expect(s.sendersToJudge(gmail).isEmpty)

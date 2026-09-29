@@ -528,7 +528,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         guard let t = reading ? reader.thread : list.selected, !t.senderEmail.isEmpty else {
             toast.show("Nothing to move — this thread has no sender but you"); return
         }
-        showOverlay(MoveOverlay(sender: t.sender, email: t.senderEmail, account: t.account, current: t.category.rawValue))
+        showOverlay(MoveOverlay(sender: t.sender, email: t.senderEmail, account: t.account, current: t.category?.rawValue ?? ""))
     }
 
     /// Teaches the sorting: the sender's mail, old and new, follows.
@@ -573,11 +573,13 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     func placeAllAsSuggested() {
         guard let box else { return }
         var seen = Set<String>()
-        let waiting = store.threads(box, .newSenders, limit: 5000).filter { !$0.senderEmail.isEmpty && seen.insert($0.account + $0.senderEmail).inserted }
-        guard !waiting.isEmpty else { toast.show("No one is waiting"); return }
+        let waiting = store.threads(box, .newSenders, limit: 5000).filter {
+            !$0.senderEmail.isEmpty && $0.category != nil && seen.insert($0.account + $0.senderEmail).inserted
+        }
+        guard !waiting.isEmpty else { toast.show("No suggestions yet — Jev hasn't answered for anyone waiting"); return }
         do {
             for (account, ts) in Dictionary(grouping: waiting, by: \.account) {
-                try actions.decideMany(account: account, ts.map { ($0.senderEmail, $0.category.rawValue) })
+                try actions.decideMany(account: account, ts.map { ($0.senderEmail, $0.category!.rawValue) })
             }
         } catch { toast.show("\(error)"); return }
         let picks = waiting
@@ -745,7 +747,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "n": decide("notify")
         case "p": decide("paper")
         case "x": decide("blocked")
-        case "y": if view == .newSenders, let t = list.selected { decide(t.category.rawValue) }
+        case "y":
+            if view == .newSenders, let t = list.selected {
+                if let c = t.category { decide(c.rawValue) } else { toast.show("No suggestion yet for \(t.sender)") }
+            }
         case "1", "2", "3", "4", "5", "6", "7", "8", "9": switchBox(Int(ch)! - 1)
         default: return false
         }
