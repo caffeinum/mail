@@ -189,6 +189,11 @@ public struct ThreadSummary: Equatable, Hashable {
     public let category: Category?
     /// The alias the thread came in through, or "" for the gmail account itself.
     public let alias: String
+    /// Everyone who wrote in the thread, in order ("Ann, Bo, me"); the sender alone when it's one person.
+    public var people: String = ""
+
+    /// What the row names: all participants when there are several.
+    public var from: String { people.isEmpty ? sender : people }
 }
 
 /// The gmail label names the three streams map onto, so a phone shows the

@@ -190,3 +190,20 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         #expect(s.threads(box, .inbox).map(\.id) == ["b"])
     }
 }
+
+@Suite struct Participants {
+    @Test func threadNamesEveryoneWhoWrote() throws {
+        let s = try tempStore()
+        var mine = msg("2", thread: "a", from: gmail, subject: "Re: plan", date: 2)
+        mine.labels = ["SENT"]
+        try s.upsert([msg("1", thread: "a", from: "ann@x.com", subject: "plan", date: 1),
+                      mine,
+                      MessageRecord(account: gmail, id: "3", threadID: "a", date: 3, labels: ["INBOX"],
+                                    from: Address(name: "Bo Diddley", email: "bo@y.com"), subject: "Re: plan")])
+        let t = s.thread(account: gmail, id: "a")!
+        #expect(t.people == "ann@x.com, me, Bo")
+        #expect(t.from == "ann@x.com, me, Bo")
+        try s.upsert([msg("9", thread: "b", from: "solo@x.com")])
+        #expect(s.thread(account: gmail, id: "b")!.from == "solo@x.com")
+    }
+}

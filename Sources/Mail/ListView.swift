@@ -387,7 +387,8 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
             return v
         case .sender(let g):
             let v = (tableView.makeView(withIdentifier: SenderRow.id, owner: nil) as? SenderRow) ?? SenderRow()
-            v.set(groups[g], open: expanded.contains(groups[g].key), when: rows[groups[g].threads[0]].date)
+            let latest = rows[groups[g].threads[0]]
+            v.set(groups[g], open: expanded.contains(groups[g].key), when: latest.date, subject: latest.subject)
             return v
         case .thread(let i):
             let v = (tableView.makeView(withIdentifier: ThreadRow.id, owner: nil) as? ThreadRow) ?? ThreadRow()
@@ -447,8 +448,10 @@ final class SenderRow: NSView {
     required init?(coder: NSCoder) { fatalError() }
     override var isFlipped: Bool { true }
 
-    func set(_ g: ListView.SenderGroup, open: Bool, when: Int64) {
-        group = g; self.open = open; self.when = when
+    private var subject = ""
+
+    func set(_ g: ListView.SenderGroup, open: Bool, when: Int64, subject: String) {
+        group = g; self.open = open; self.when = when; self.subject = subject
         needsDisplay = true
     }
 
@@ -468,10 +471,14 @@ final class SenderRow: NSView {
         let para = NSMutableParagraphStyle()
         para.lineBreakMode = .byTruncatingTail
         name.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: name.length))
-        name.draw(with: NSRect(x: col.minX + 38, y: y, width: 250, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
-        (g.email as NSString).draw(with: NSRect(x: col.minX + 300, y: y, width: col.width - 400, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [
-            .font: Style.body, .foregroundColor: Palette.secondary, .paragraphStyle: para,
-        ])
+        name.draw(with: NSRect(x: col.minX + 38, y: y, width: 158, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        // Like a thread row's subject + preview: here the address, then the latest subject.
+        let line = NSMutableAttributedString(string: g.email, attributes: [.font: Style.body, .foregroundColor: Palette.text])
+        if !subject.isEmpty {
+            line.append(NSAttributedString(string: "   " + subject, attributes: [.font: Style.body, .foregroundColor: Palette.secondary]))
+        }
+        line.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: line.length))
+        line.draw(with: NSRect(x: col.minX + 38 + 170, y: y, width: col.width - 38 - 170 - 96, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
         let right = NSMutableParagraphStyle()
         right.alignment = .right
         (ThreadRow.when(when) as NSString).draw(with: NSRect(x: col.maxX - 82, y: y + 1, width: 70, height: 18), options: .usesLineFragmentOrigin, attributes: [
@@ -552,7 +559,7 @@ final class ThreadRow: NSView {
         let senderW: CGFloat = 170
         var dateW: CGFloat = 70
         let y = (h - 17) / 2
-        var sender = t.sender
+        var sender = t.from
         if t.count > 1 { sender += "  \(t.count)" }
         let x0 = col.minX + 38
         (sender as NSString).draw(with: NSRect(x: x0, y: y, width: senderW - 12, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [

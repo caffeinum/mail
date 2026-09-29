@@ -25,13 +25,17 @@ public final class Store {
         }
     }
 
-    public static let schemaVersion = 6
+    public static let schemaVersion = 7
     /// Bump when how threads are placed changes: the cache re-sorts on open.
-    public static let sortingVersion = 12
+    public static let sortingVersion = 13
 
     private func migrate() throws {
         let v = try db.scalar("PRAGMA user_version")
         guard v < Self.schemaVersion else { return }
+        if v >= 1 && v < 7 {
+            // v7: who took part in each thread, for the row.
+            try? db.exec("ALTER TABLE threads ADD COLUMN people TEXT NOT NULL DEFAULT ''")
+        }
         if v >= 1 && v < 5 {
             // v5: nobody is "known" by default any more; they wait to be placed.
             try db.exec("DELETE FROM senders WHERE decision='known'")
@@ -73,7 +77,8 @@ public final class Store {
             account TEXT NOT NULL, id TEXT NOT NULL, alias TEXT NOT NULL DEFAULT '', view TEXT NOT NULL DEFAULT '',
             category TEXT NOT NULL, date INTEGER NOT NULL, subject TEXT NOT NULL, snippet TEXT NOT NULL,
             sender TEXT NOT NULL, sender_email TEXT NOT NULL, unread INTEGER NOT NULL, count INTEGER NOT NULL,
-            labels TEXT NOT NULL, has_body INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(account, id));
+            labels TEXT NOT NULL, has_body INTEGER NOT NULL DEFAULT 0, people TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY(account, id));
         CREATE INDEX IF NOT EXISTS threads_view ON threads(account, alias, view, date DESC);
         CREATE INDEX IF NOT EXISTS threads_sender ON threads(account, sender_email);
         CREATE TABLE IF NOT EXISTS senders(
@@ -307,24 +312,41 @@ public final class Store {
         else if let category, category != .inbox, inInbox || labelled { view = category.rawValue }
 
         try db.run("""
-            INSERT INTO threads(account,id,alias,view,category,date,subject,snippet,sender,sender_email,unread,count,labels,has_body)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO threads(account,id,alias,view,category,date,subject,snippet,sender,sender_email,unread,count,labels,has_body,people)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(account,id) DO UPDATE SET alias=excluded.alias, view=excluded.view, category=excluded.category,
                 date=excluded.date, subject=excluded.subject, snippet=excluded.snippet, sender=excluded.sender,
                 sender_email=excluded.sender_email, unread=excluded.unread, count=excluded.count, labels=excluded.labels,
-                has_body=excluded.has_body
+                has_body=excluded.has_body, people=excluded.people
             """, [account, id, alias, view, category?.rawValue ?? "", last.date, msgs.first?.subject ?? "", last.snippet, sender,
                   senderEmail, union.contains("UNREAD"), msgs.count, Self.labelText(Array(union).sorted()),
-                  msgs.allSatisfy(\.hasBody)])
+                  msgs.allSatisfy(\.hasBody), Self.people(msgs, mine: mine)])
     }
 
     private func summary(_ r: Row) -> ThreadSummary {
         ThreadSummary(account: r.text(0), id: r.text(1), date: r.int64(2), subject: r.text(3), snippet: r.text(4),
                       sender: r.text(5), senderEmail: r.text(6), unread: r.bool(7), count: r.int(8),
-                      category: Category(rawValue: r.text(9)), alias: r.text(10))
+                      category: Category(rawValue: r.text(9)), alias: r.text(10), people: r.text(11))
     }
 
-    private static let cols = "account,id,date,subject,snippet,sender,sender_email,unread,count,category,alias"
+    /// "Ann, Bo, me" — each writer once, in the order they joined; first
+    /// names once there's more than one. Empty when only one person wrote.
+    static func people(_ msgs: [MessageRecord], mine: Set<String>) -> String {
+        var seen = Set<String>()
+        var names: [String] = []
+        for m in msgs {
+            guard let a = m.shownFrom else { continue }
+            let isMe = mine.contains(a.normalized) || Composer.isSelfRelay(m.from, mine: mine)
+            let key = isMe ? "me" : a.normalized
+            guard seen.insert(key).inserted else { continue }
+            names.append(isMe ? "me" : a.display)
+        }
+        guard names.count > 1 else { return "" }
+        return names.map { n in n == "me" || n.contains("@") ? n : String(n.split(separator: " ").first ?? Substring(n)) }
+            .joined(separator: ", ")
+    }
+
+    private static let cols = "account,id,date,subject,snippet,sender,sender_email,unread,count,category,alias,people"
 
     /// `WHERE` for a mailbox: one account (and alias), or everything.
     private func scope(_ box: Mailbox, prefix: String = "") -> (String, [SQLBindable]) {
