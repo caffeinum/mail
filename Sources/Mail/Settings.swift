@@ -146,7 +146,7 @@ struct SettingsView: SwiftUI.View {
                     ForEach(a.aliases, id: \.address) { r in
                         HStack {
                             Text("↳ \(r.label)").foregroundStyle(.secondary)
-                            Text(r.address).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                            Text(r.address).font(.system(size: 12)).foregroundStyle(.secondary)
                             Spacer()
                             Button("Remove") { model.removeAlias(a.email, r.address) }.controlSize(.small)
                         }

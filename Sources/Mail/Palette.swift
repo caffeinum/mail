@@ -130,7 +130,7 @@ final class PaletteOverlay: Overlay, NSTableViewDataSource, NSTableViewDelegate,
         let a = NSTextField(labelWithString: c.title)
         a.font = .systemFont(ofSize: 13)
         let b = NSTextField(labelWithString: c.key)
-        b.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        b.font = .systemFont(ofSize: 11, weight: .regular)
         b.textColor = .tertiaryLabelColor
         let s = NSStackView(views: [a, NSView(), b])
         s.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)

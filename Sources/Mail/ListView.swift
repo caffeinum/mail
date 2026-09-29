@@ -318,13 +318,13 @@ final class ThreadRow: NSView {
         if let account = accountTag {
             dateW += 96
             (account as NSString).draw(with: NSRect(x: col.maxX - dateW + 6, y: y + 1, width: 90, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [
-                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), .foregroundColor: Palette.secondary, .paragraphStyle: para,
+                .font: NSFont.systemFont(ofSize: 11, weight: .regular), .foregroundColor: Palette.secondary, .paragraphStyle: para,
             ])
         }
         if suggest, let c = t.category, let tag = Self.suggestion[c.rawValue] {
             dateW += 124
             (tag as NSString).draw(with: NSRect(x: col.maxX - dateW + 4, y: y + 1, width: 120, height: 18), options: .usesLineFragmentOrigin, attributes: [
-                .font: NSFont.monospacedSystemFont(ofSize: 11.5, weight: .medium), .foregroundColor: Palette.accent,
+                .font: NSFont.systemFont(ofSize: 11.5, weight: .medium), .foregroundColor: Palette.accent,
             ])
         }
         let x = x0 + senderW

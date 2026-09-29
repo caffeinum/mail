@@ -191,7 +191,7 @@ final class HelpOverlay: Overlay {
     init() {
         super.init(width: 540)
         let grid = NSGridView(views: Self.keys.map { k, v in
-            let a = NSTextField(labelWithString: k); a.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
+            let a = NSTextField(labelWithString: k); a.font = .systemFont(ofSize: 12, weight: .medium)
             let b = NSTextField(labelWithString: v); b.font = .systemFont(ofSize: 13); b.textColor = .secondaryLabelColor
             return [a, b]
         })
@@ -229,7 +229,7 @@ final class MoveOverlay: Overlay {
         var rows: [NSView] = [title, sub]
         for c in Self.choices {
             let k = NSTextField(labelWithString: c.key)
-            k.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
+            k.font = .systemFont(ofSize: 12, weight: .medium)
             k.textColor = .secondaryLabelColor
             let t = NSTextField(labelWithString: c.title + (c.decision == current ? "  (now)" : ""))
             t.font = .systemFont(ofSize: 14)

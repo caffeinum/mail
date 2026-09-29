@@ -156,7 +156,7 @@ final class FeedStream: NSView {
         const body = document.createElement('section');
         const root = body.attachShadow({ mode: 'open' });
         root.innerHTML = '<style>:host{display:block;padding:16px 22px 22px;color:#1d1d1f;overflow-wrap:anywhere}' +
-          'img{max-width:100%;height:auto}table{max-width:100%!important}pre{white-space:pre-wrap;font:13px ui-monospace,monospace}' +
+          'img{max-width:100%;height:auto}table{max-width:100%!important}pre{white-space:pre-wrap;font:14px -apple-system,sans-serif}' +
           '.snip{color:#86868b}</style>' + it.html;
         a.appendChild(body);
         if (!it.cached) { const n = document.createElement('div'); n.className = 'note'; n.textContent = 'preview — the full email is still downloading'; a.appendChild(n); }

@@ -120,7 +120,7 @@ final class SidebarItem: NSView, NSTextFieldDelegate {
         switch trailing {
         case .key(let k):
             let l = NSTextField(labelWithString: k)
-            l.font = .monospacedSystemFont(ofSize: 10.5, weight: .regular)
+            l.font = .systemFont(ofSize: 10.5, weight: .regular)
             l.textColor = .tertiaryLabelColor
             right = l
         case .count(let n):
