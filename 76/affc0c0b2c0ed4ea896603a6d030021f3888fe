@@ -1,0 +1,19 @@
+Sources/Mail/FeedStream.swift
+  s_f86aa9fa11a3e8::t_1ad9ee741e2eb1 226-228,230-236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "76affc0c0b2c0ed4ea896603a6d030021f3888fe",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
