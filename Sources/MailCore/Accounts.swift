@@ -93,7 +93,8 @@ extension AccountsFile {
         for i in accounts.indices {
             for addr in found[accounts[i].email] ?? [] {
                 let a = addr.lowercased()
-                guard !accounts[i].aliases.contains(where: { $0.address.lowercased() == a }),
+                guard !MessageRecord.isRelayForm(a),
+                      !accounts[i].aliases.contains(where: { $0.address.lowercased() == a }),
                       !accounts[i].ignoredAliases.contains(a) else { continue }
                 let domain = String(a.split(separator: "@").last ?? "")
                 let label = accounts[i].aliases.contains { $0.label == domain } ? a : domain

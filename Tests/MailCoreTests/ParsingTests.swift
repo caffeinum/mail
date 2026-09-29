@@ -77,3 +77,17 @@ import Foundation
         #expect(MessageRecord.forwardedTo("aleksb@duck.com") == "aleksb@duck.com")
     }
 }
+
+@Suite struct RelayIsNotAnAlias {
+    @Test func echoOfOurReplyPointsAtTheAlias() {
+        #expect(MessageRecord.forwardedTo("Anna <anna_at_h1b.biz_aleksb@duck.com>") == "aleksb@duck.com")
+        #expect(MessageRecord.isRelayForm("support_at_ghost.org_aleksb@duck.com"))
+        #expect(!MessageRecord.isRelayForm("aleksb@duck.com"))
+    }
+
+    @Test func relayAddressesAreNeverAdopted() {
+        var f = AccountsFile(accounts: [AccountConfig(email: "a@gmail.com")])
+        #expect(f.adopt(["a@gmail.com": ["anna_at_h1b.biz_aleksb@duck.com"]]).isEmpty)
+        #expect(f.adopt(["a@gmail.com": ["aleksb@duck.com"]]) == ["aleksb@duck.com"])
+    }
+}

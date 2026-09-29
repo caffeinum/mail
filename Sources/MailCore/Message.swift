@@ -83,7 +83,16 @@ public struct MessageRecord: Equatable {
     /// address is the one that counts.
     public static func forwardedTo(_ raw: String) -> String? {
         let emails = Address.parseList(raw).map(\.normalized)
-        return emails.first { $0.hasSuffix("@duck.com") } ?? emails.first
+        if let alias = emails.first(where: { $0.hasSuffix("@duck.com") && !isRelayForm($0) }) { return alias }
+        // Our own reply, echoed back: only relay addresses
+        // (someone_at_example.com_alias@duck.com) — the alias is their tail.
+        if let relay = emails.first(where: isRelayForm), let tail = relay.split(separator: "_").last { return String(tail) }
+        return emails.first
+    }
+
+    /// someone_at_example.com_alias@duck.com — a relay address, never an alias.
+    public static func isRelayForm(_ email: String) -> Bool {
+        email.hasSuffix("@duck.com") && email.contains("_at_")
     }
 
     static func charset(_ part: GmailPart) -> String {
