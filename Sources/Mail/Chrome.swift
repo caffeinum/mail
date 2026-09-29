@@ -215,9 +215,11 @@ final class MoveOverlay: Overlay {
         ("i", "Inbox", "inbox"), ("f", "Feed", "feed"), ("p", "Paper Trail", "paper"), ("m", "Muted", "muted"), ("x", "Block", "blocked"),
     ]
     let email: String
+    let account: String
 
-    init(sender: String, email: String, current: String) {
+    init(sender: String, email: String, account: String, current: String) {
         self.email = email
+        self.account = account
         super.init(width: 420, top: 140)
         let title = NSTextField(labelWithString: "Move \(sender) to…")
         title.font = .systemFont(ofSize: 15, weight: .semibold)

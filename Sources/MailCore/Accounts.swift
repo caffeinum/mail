@@ -37,7 +37,7 @@ public struct AccountConfig: Codable, Equatable, Hashable {
 
 /// What the ui calls an account: a gmail account, or an alias shown apart.
 public struct Mailbox: Equatable, Hashable, Identifiable {
-    public enum Kind: Equatable, Hashable { case gmail, alias(AliasRule) }
+    public enum Kind: Equatable, Hashable { case gmail, alias(AliasRule), all }
     public let account: String
     public let kind: Kind
     public let title: String
@@ -46,8 +46,13 @@ public struct Mailbox: Equatable, Hashable, Identifiable {
         switch kind {
         case .gmail: return "gmail:\(account)"
         case .alias(let r): return "alias:\(account):\(r.address.lowercased())"
+        case .all: return "all"
         }
     }
+
+    /// ⌃0: every account and alias in one list.
+    public static let all = Mailbox(account: "", kind: .all, title: "All accounts")
+    public var isAll: Bool { kind == .all }
 
     public var alias: AliasRule? { if case .alias(let r) = kind { return r }; return nil }
 }
@@ -58,6 +63,11 @@ public struct AccountsFile: Codable, Equatable {
     /// owner turns them on. Until then sends become drafts and label changes
     /// stay local.
     public var writesEnabled: [String]
+
+    /// The mailbox a thread belongs to, for acting on it from the combined view.
+    public func mailbox(account: String, alias: String) -> Mailbox? {
+        mailboxes.first { $0.account == account && ($0.alias?.address.lowercased() ?? "") == alias }
+    }
 
     public init(accounts: [AccountConfig] = [], writesEnabled: [String] = []) {
         self.accounts = accounts; self.writesEnabled = writesEnabled

@@ -58,6 +58,8 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
     var onOpen: ((Int) -> Void)?
     /// In New Senders each row shows where it would go.
     var suggest = false
+    /// In the combined view each row names its account ("account\u{1}alias" → title).
+    var accountTags: [String: String] = [:]
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -159,6 +161,7 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
         case .thread(let i):
             let v = (tableView.makeView(withIdentifier: ThreadRow.id, owner: nil) as? ThreadRow) ?? ThreadRow()
             v.suggest = suggest
+            v.accountTag = accountTags.isEmpty ? nil : accountTags[rows[i].account + "\u{1}" + rows[i].alias]
             v.thread = rows[i]
             return v
         }
@@ -201,6 +204,7 @@ final class ThreadRow: NSView {
     static let id = NSUserInterfaceItemIdentifier("row")
     var thread: ThreadSummary? { didSet { needsDisplay = true } }
     var suggest = false
+    var accountTag: String?
 
     override init(frame: NSRect) { super.init(frame: frame); identifier = Self.id }
     required init?(coder: NSCoder) { fatalError() }
@@ -250,6 +254,12 @@ final class ThreadRow: NSView {
             .font: Style.body, .foregroundColor: Palette.secondary,
         ]))
         line.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: line.length))
+        if let account = accountTag {
+            dateW += 96
+            (account as NSString).draw(with: NSRect(x: col.maxX - dateW + 6, y: y + 1, width: 90, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), .foregroundColor: Palette.secondary, .paragraphStyle: para,
+            ])
+        }
         if suggest, let tag = Self.suggestion[t.category.rawValue] {
             dateW += 110
             (tag as NSString).draw(with: NSRect(x: col.maxX - dateW + 4, y: y + 1, width: 104, height: 18), options: .usesLineFragmentOrigin, attributes: [

@@ -330,24 +330,30 @@ public final class Store {
     private func summary(_ r: Row) -> ThreadSummary {
         ThreadSummary(account: r.text(0), id: r.text(1), date: r.int64(2), subject: r.text(3), snippet: r.text(4),
                       sender: r.text(5), senderEmail: r.text(6), unread: r.bool(7), count: r.int(8),
-                      category: Category(rawValue: r.text(9)) ?? .inbox)
+                      category: Category(rawValue: r.text(9)) ?? .inbox, alias: r.text(10))
     }
 
-    private static let cols = "account,id,date,subject,snippet,sender,sender_email,unread,count,category"
+    private static let cols = "account,id,date,subject,snippet,sender,sender_email,unread,count,category,alias"
+
+    /// `WHERE` for a mailbox: one account (and alias), or everything.
+    private func scope(_ box: Mailbox, prefix: String = "") -> (String, [SQLBindable]) {
+        if box.isAll { return ("1=1", []) }
+        return ("\(prefix)account=? AND \(prefix)alias=?", [box.account, box.alias?.address.lowercased() ?? ""])
+    }
 
     public func threads(_ box: Mailbox, _ view: View, limit: Int = 200, offset: Int = 0) -> [ThreadSummary] {
-        let alias = box.alias?.address.lowercased() ?? ""
         if case .search(let q) = view { return search(box, q, limit: limit) }
+        let (w, args) = scope(box)
         return (try? db.query("""
-            SELECT \(Self.cols) FROM threads WHERE account=? AND alias=? AND view=? ORDER BY date DESC LIMIT ? OFFSET ?
-            """, box.account, alias, view.key, limit, offset, map: summary)) ?? []
+            SELECT \(Self.cols) FROM threads WHERE \(w) AND view=? ORDER BY date DESC LIMIT ? OFFSET ?
+            """, args + [view.key, limit, offset], map: summary)) ?? []
     }
 
     public func count(_ box: Mailbox, _ view: View) -> Int {
-        let alias = box.alias?.address.lowercased() ?? ""
         // New Senders counts people, not threads: you decide once per sender.
-        let what = view == .newSenders ? "count(DISTINCT sender_email)" : "count(*)"
-        return (try? db.scalar("SELECT \(what) FROM threads WHERE account=? AND alias=? AND view=?", box.account, alias, view.key)) ?? 0
+        let what = view == .newSenders ? "count(DISTINCT account || sender_email)" : "count(*)"
+        let (w, args) = scope(box)
+        return (try? db.query("SELECT \(what) FROM threads WHERE \(w) AND view=?", args + [view.key]) { $0.int(0) }.first) ?? 0
     }
 
     public func thread(account: String, id: String) -> ThreadSummary? {
@@ -355,11 +361,11 @@ public final class Store {
     }
 
     public func threadsNeedingBodies(_ box: Mailbox, _ view: View, limit: Int) -> [String] {
-        let alias = box.alias?.address.lowercased() ?? ""
+        let (w, args) = scope(box)
         return (try? db.query("""
-            SELECT id FROM (SELECT id, has_body FROM threads WHERE account=? AND alias=? AND view=? ORDER BY date DESC LIMIT ?)
+            SELECT id FROM (SELECT id, has_body FROM threads WHERE \(w) AND view=? ORDER BY date DESC LIMIT ?)
             WHERE has_body=0
-            """, box.account, alias, view.key, limit) { $0.text(0) }) ?? []
+            """, args + [view.key, limit]) { $0.text(0) }) ?? []
     }
 
     public func hasBodies(account: String, thread: String) -> Bool {
@@ -392,14 +398,14 @@ public final class Store {
     public func search(_ box: Mailbox, _ q: String, limit: Int = 200) -> [ThreadSummary] {
         let fts = Self.ftsQuery(q)
         guard !fts.isEmpty else { return [] }
-        let alias = box.alias?.address.lowercased() ?? ""
+        let (w, args) = scope(box, prefix: "t.")
         return (try? db.query("""
             SELECT \(Self.cols.split(separator: ",").map { "t.\($0)" }.joined(separator: ",")) FROM threads t
-            WHERE t.account=? AND t.alias=? AND t.id IN (
-                SELECT m.thread_id FROM msg_fts JOIN messages m ON m.rowid = msg_fts.rowid
-                WHERE msg_fts MATCH ? AND m.account=?)
+            WHERE \(w) AND (t.account || char(1) || t.id) IN (
+                SELECT m.account || char(1) || m.thread_id FROM msg_fts JOIN messages m ON m.rowid = msg_fts.rowid
+                WHERE msg_fts MATCH ?)
             ORDER BY t.date DESC LIMIT ?
-            """, box.account, alias, fts, box.account, limit, map: summary)) ?? []
+            """, args + [fts, limit], map: summary)) ?? []
     }
 
     // MARK: senders

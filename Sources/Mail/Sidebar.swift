@@ -42,6 +42,9 @@ final class Sidebar: NSView {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         guard !boxes.isEmpty else { return }
         stack.addArrangedSubview(heading("ACCOUNTS"))
+        if boxes.count > 1 {
+            add(SidebarItem(title: "All accounts", trailing: .key("⌃0"), on: current?.isAll == true) { [weak self] in self?.onAccount?(-1) })
+        }
         for (i, b) in boxes.enumerated() {
             let email = b.alias?.address ?? b.account
             let item = SidebarItem(title: b.title, subtitle: b.title == email ? nil : email, trailing: .key("⌃\(i + 1)"), on: b == current) { [weak self] in self?.onAccount?(i) }

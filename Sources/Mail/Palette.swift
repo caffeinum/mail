@@ -73,10 +73,11 @@ final class PaletteOverlay: Overlay, NSTableViewDataSource, NSTableViewDelegate,
         if let t = m.list.selected, !t.senderEmail.isEmpty {
             for choice in MoveOverlay.choices {
                 c.append(.init(title: "Move \(t.sender) to \(choice.title)", key: "m \(choice.key)") {
-                    m.moveSender(t.senderEmail, to: choice.decision, title: choice.title)
+                    m.moveSender(t.senderEmail, account: t.account, to: choice.decision, title: choice.title)
                 })
             }
         }
+        if m.boxes.count > 1 { c.append(.init(title: "All accounts together", key: "⌃0") { m.showAll() }) }
         for (i, b) in m.boxes.enumerated() {
             c.append(.init(title: "Switch to \(b.title)", key: "⌃\(i + 1)") { m.switchBox(i) })
         }

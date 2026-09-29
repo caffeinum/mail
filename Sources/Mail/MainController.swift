@@ -108,7 +108,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         sidebarWidth.isActive = true
         sidebar.isHidden = !shown
         header.sidebarShown = shown
-        sidebar.onAccount = { [weak self] i in self?.switchBox(i) }
+        sidebar.onAccount = { [weak self] i in if i < 0 { self?.showAll() } else { self?.switchBox(i) } }
         sidebar.onStream = { [weak self] v in self?.go(v) }
         sidebar.onRename = { [weak self] i, name in self?.rename(box: i, to: name) }
         Launch.mark("layout")
@@ -183,11 +183,12 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             return
         }
         list.suggest = view == .newSenders
+        list.accountTags = box.isAll ? Dictionary(boxes.map { ($0.account + "\u{1}" + ($0.alias?.address.lowercased() ?? ""), $0.title) }, uniquingKeysWith: { a, _ in a }) : [:]
         var rows = store.threads(box, view, limit: 500)
         if view == .newSenders {
             // One row per sender — their latest thread stands for them.
             var seen = Set<String>()
-            rows = rows.filter { seen.insert($0.senderEmail).inserted }
+            rows = rows.filter { seen.insert($0.account + $0.senderEmail).inserted }
         }
         list.set(rows, keep: id)
         if pane == nil { if streaming { showStream() } else if !reading { fill(content, with: list) } }
@@ -258,7 +259,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     func cacheChanged(account: String) {
         errors[account] = nil
-        guard box?.account == account else { return }
+        guard box?.account == account || box?.isAll == true else { return }
         reloadList(keep: list.selected?.id)
         if reading, let t = reader.thread {
             let fresh = store.thread(account: t.account, id: t.id) ?? t
@@ -268,7 +269,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     func syncFailed(account: String, error: Error) {
         errors[account] = "offline — showing what's cached"
-        if box?.account == account { reloadList(keep: list.selected?.id) }
+        if box?.account == account || box?.isAll == true { reloadList(keep: list.selected?.id) }
     }
 
     func accountsChanged() {
@@ -295,8 +296,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         let i = list.selectedIndex
         guard i >= 0 else { return }
         let lo = max(0, i - 5), hi = min(list.rows.count, i + 6)
-        let ids = list.rows[lo..<hi].filter { !store.hasBodies(account: $0.account, thread: $0.id) }.map(\.id)
-        engine.prefetch(box.account, ids)
+        _ = box
+        prefetch(Array(list.rows[lo..<hi]))
     }
 
     // MARK: navigation
@@ -307,7 +308,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         view = v
         if case .search = v {} else { lastTab = v; header.search.stringValue = "" }
         reloadList()
-        if let box { engine.prefetch(box.account, store.threadsNeedingBodies(box, v, limit: 50)) }
+        if let box { prefetch(store.threads(box, v, limit: 50)) }
     }
 
     /// Tab walks Inbox → Feed → Paper Trail (→ New Senders when someone's
@@ -317,6 +318,28 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         let tabs = View.tabs.filter { $0 != .newSenders || store.count(box, .newSenders) > 0 }
         let i = tabs.firstIndex(of: lastTab) ?? 0
         go(tabs[(i + d + tabs.count) % tabs.count])
+    }
+
+    /// ⌃0: every account together. Each thread still acts as its own account.
+    func showAll() {
+        guard boxes.count > 1 else { return }
+        if reading { closeThread() }
+        box = .all
+        feedOrder = nil
+        stream.invalidate()
+        if case .search = view { view = lastTab }
+        reloadList()
+    }
+
+    func boxFor(_ t: ThreadSummary) -> Mailbox? {
+        guard let box else { return nil }
+        return box.isAll ? store.config.mailbox(account: t.account, alias: t.alias) : box
+    }
+
+    private func prefetch(_ threads: [ThreadSummary]) {
+        for (account, ts) in Dictionary(grouping: threads, by: \.account) {
+            engine.prefetch(account, ts.filter { !store.hasBodies(account: account, thread: $0.id) }.map(\.id))
+        }
     }
 
     func switchBox(_ i: Int) {
@@ -421,10 +444,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     }
 
     func compose(_ mode: ReplyMode) {
-        guard let box else { return }
+        guard let current = box else { return }
         let thread = list.selected
         if mode != .new, thread == nil { return }
-        if mode != .new, let t = thread {
+        if mode != .new, let t = thread, let box = boxFor(t) {
             if !reading { openSelected() }
             do {
                 let r = try InlineReply(box: box, mode: mode, thread: store.messages(account: t.account, thread: t.id), config: store.config)
@@ -442,6 +465,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             } catch { toast.show("\(error)") }
             return
         }
+        guard let box = current.isAll ? boxes.first : current else { return }
         let c = ComposeView(box: box)
         c.onCancel = { [weak self] in self?.closePane() }
         c.onSend = { [weak self] m, alias in
@@ -504,14 +528,13 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         guard let t = reading ? reader.thread : list.selected, !t.senderEmail.isEmpty else {
             toast.show("Nothing to move — this thread has no sender but you"); return
         }
-        showOverlay(MoveOverlay(sender: t.sender, email: t.senderEmail, current: t.category.rawValue))
+        showOverlay(MoveOverlay(sender: t.sender, email: t.senderEmail, account: t.account, current: t.category.rawValue))
     }
 
     /// Teaches the sorting: the sender's mail, old and new, follows.
-    func moveSender(_ email: String, to decision: String, title: String) {
-        guard let box else { return }
+    func moveSender(_ email: String, account: String, to decision: String, title: String) {
         let backToList = reading
-        act("Moved \(email) to \(title)") { _ in try actions.decide(account: box.account, email: email, category: decision) }
+        act("Moved \(email) to \(title)") { _ in try actions.decide(account: account, email: email, category: decision) }
         if backToList && reading { closeThread() }
     }
 
@@ -550,12 +573,14 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     func placeAllAsSuggested() {
         guard let box else { return }
         var seen = Set<String>()
-        let picks = store.threads(box, .newSenders, limit: 5000).compactMap { t -> (email: String, category: String)? in
-            guard !t.senderEmail.isEmpty, seen.insert(t.senderEmail).inserted else { return nil }
-            return (t.senderEmail, t.category.rawValue)
-        }
-        guard !picks.isEmpty else { toast.show("No one is waiting"); return }
-        do { try actions.decideMany(account: box.account, picks) } catch { toast.show("\(error)"); return }
+        let waiting = store.threads(box, .newSenders, limit: 5000).filter { !$0.senderEmail.isEmpty && seen.insert($0.account + $0.senderEmail).inserted }
+        guard !waiting.isEmpty else { toast.show("No one is waiting"); return }
+        do {
+            for (account, ts) in Dictionary(grouping: waiting, by: \.account) {
+                try actions.decideMany(account: account, ts.map { ($0.senderEmail, $0.category.rawValue) })
+            }
+        } catch { toast.show("\(error)"); return }
+        let picks = waiting
         reloadList()
         toast.show("Placed \(picks.count) senders as suggested  ·  z to undo")
     }
@@ -621,8 +646,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     func key(_ e: NSEvent) -> Bool {
         let mods = e.modifierFlags.intersection([.command, .control, .option])
         let ch = e.charactersIgnoringModifiers ?? ""
-        if mods == .control, let n = Int(ch), n >= 1 {
-            switchBox(n - 1)
+        if mods == .control, let n = Int(ch) {
+            if n == 0 { showAll() } else { switchBox(n - 1) }
             return true
         }
         if mods == .command {
@@ -637,7 +662,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             if e.keyCode == 53 { closeOverlay(); return true }
             if let c = MoveOverlay.choices.first(where: { $0.key == ch }) {
                 closeOverlay()
-                moveSender(move.email, to: c.decision, title: c.title)
+                moveSender(move.email, account: move.account, to: c.decision, title: c.title)
             }
             return true
         }
@@ -705,7 +730,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "z": undo()
         case "m": showMove()
         case "M":
-            if let t = reading ? reader.thread : list.selected, !t.senderEmail.isEmpty { moveSender(t.senderEmail, to: "muted", title: "Muted") }
+            if let t = reading ? reader.thread : list.selected, !t.senderEmail.isEmpty { moveSender(t.senderEmail, account: t.account, to: "muted", title: "Muted") }
         case "i": loadImages(always: false)
         case "I": loadImages(always: true)
         case "/": startSearch()
@@ -714,7 +739,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "r": compose(.reply)
         case "R": compose(.replyAll)
         case "F": compose(.forward)
-        case "a", "y": decide("inbox")
+        case "a": decide("inbox")
         case "f": decide("feed")
         case "p": decide("paper")
         case "x": decide("blocked")

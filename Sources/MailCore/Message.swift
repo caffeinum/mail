@@ -183,6 +183,8 @@ public struct ThreadSummary: Equatable, Hashable {
     public let unread: Bool
     public let count: Int
     public let category: Category
+    /// The alias the thread came in through, or "" for the gmail account itself.
+    public let alias: String
 }
 
 /// The gmail label names the three streams map onto, so a phone shows the
