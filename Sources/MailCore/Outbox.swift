@@ -190,6 +190,7 @@ public actor OutboxRunner {
             case "feed": add = [try await labelID(Streams.feed, gmail)]; remove = ["INBOX"]
             case "paper": add = [try await labelID(Streams.paper, gmail)]; remove = ["INBOX"]
             case "blocked": add = ["TRASH"]; remove = ["INBOX"]
+            case "muted": add = [try await labelID(Streams.muted, gmail)]; remove = ["INBOX", "UNREAD"]
             default: return ("done", nil)
             }
             let f = try await gmail.createFilter(from: email, add: add, remove: remove)

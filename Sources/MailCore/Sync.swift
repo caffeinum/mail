@@ -44,6 +44,13 @@ public actor AccountSync {
         } else {
             r = try await fill()
         }
+        // Caches filled before spam was shown pick it up once.
+        let key = "backfill.spam.\(account)"
+        if store.get(key) == nil {
+            let refs = try await gmail.threads(query: "in:spam", max: 50).refs
+            r.fetched += try await fetchThreads(refs.map(\.id), format: .metadata)
+            store.set(key, "1")
+        }
         r.ms = Int(Date().timeIntervalSince(t0) * 1000)
         return r
     }
@@ -53,6 +60,7 @@ public actor AccountSync {
         ("label:\(Streams.feed.replacingOccurrences(of: "/", with: "-"))", 100),
         ("label:\(Streams.paper.replacingOccurrences(of: "/", with: "-"))", 100),
         ("in:sent", 100),
+        ("in:spam", 50),
     ]
 
     func fill() async throws -> Report {

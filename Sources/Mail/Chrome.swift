@@ -180,7 +180,7 @@ class Overlay: NSView {
 final class HelpOverlay: Overlay {
     static let keys: [(String, String)] = [
         ("j / k", "next / previous"), ("g g / G", "top / bottom"), ("o / ↩", "open"), ("u / esc", "back"),
-        ("e", "done (out of the inbox)"), ("#", "trash"), ("U", "read / unread"), ("z", "undo"),
+        ("e", "done (out of the inbox)"), ("#", "trash"), ("!", "spam (again in Spam: not spam)"), ("g x", "spam folder"), ("M", "mute sender (g m: Muted)"), ("U", "read / unread"), ("z", "undo"),
         ("/", "search"), ("⌘K", "command palette"), ("c", "new message"), ("r / R / F", "reply / reply all / forward"),
         ("⌘↩", "send"), ("tab / ⇧tab", "next / previous stream"), ("g i · g f · g p · g n", "inbox · feed · paper trail · new senders"),
         ("⌃1 ⌃2 ⌃3", "switch account"), ("a · f · p · x · y", "new sender: inbox · feed · paper trail · block · as suggested"),
@@ -212,7 +212,7 @@ final class HelpOverlay: Overlay {
 /// thread from them, now and later, goes there too.
 final class MoveOverlay: Overlay {
     static let choices: [(key: String, title: String, decision: String)] = [
-        ("i", "Inbox", "inbox"), ("f", "Feed", "feed"), ("p", "Paper Trail", "paper"), ("x", "Block", "blocked"),
+        ("i", "Inbox", "inbox"), ("f", "Feed", "feed"), ("p", "Paper Trail", "paper"), ("m", "Muted", "muted"), ("x", "Block", "blocked"),
     ]
     let email: String
 

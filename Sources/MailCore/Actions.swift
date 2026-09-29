@@ -52,6 +52,28 @@ public final class Actions {
         undo.append(e)
     }
 
+    /// !: spam. Gmail's Spam label, out of the inbox, and the sender blocked
+    /// so nothing of theirs waits in New Senders. ! again in Spam undoes it.
+    public func spam(_ threads: [ThreadSummary], notSpam: Bool = false) throws {
+        var e = Entry(title: notSpam ? "Not spam" : "Marked as spam", outbox: [], restore: [])
+        for t in threads {
+            if notSpam { try labels(t, add: ["INBOX"], remove: ["SPAM"], entry: &e) }
+            else { try labels(t, add: ["SPAM"], remove: ["INBOX"], entry: &e) }
+            guard !t.senderEmail.isEmpty else { continue }
+            let prior = store.senderRow(account: t.account, email: t.senderEmail)
+            if notSpam {
+                if prior?.decision == "blocked" { try store.undecide(account: t.account, email: t.senderEmail) }
+            } else {
+                try store.decide(account: t.account, email: t.senderEmail, decision: "blocked")
+            }
+            e.restore.append { [store] in
+                if let prior { try store.decide(account: t.account, email: t.senderEmail, decision: prior.decision, filterID: prior.filterID) }
+                else { try store.undecide(account: t.account, email: t.senderEmail) }
+            }
+        }
+        undo.append(e)
+    }
+
     /// Opening a thread reads it. Not worth an undo step.
     public func markRead(_ t: ThreadSummary) {
         guard t.unread else { return }
@@ -101,6 +123,7 @@ public final class Actions {
         case "feed": return "Moved to Feed"
         case "paper": return "Moved to Paper Trail"
         case "blocked": return "Blocked"
+        case "muted": return "Muted"
         default: return "Let in"
         }
     }

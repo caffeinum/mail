@@ -174,3 +174,30 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         #expect(file.adopt([gmail: ["someone@duck.com"]]).isEmpty)
     }
 }
+
+@Suite struct SpamAndMuted {
+    let box = Mailbox(account: gmail, kind: .gmail, title: "g")
+
+    @Test func spamGoesToSpamAndBack() throws {
+        let s = try tempStore()
+        try s.upsert([msg("1", thread: "a", from: "ann@x.com")])
+        try place(s, [("ann@x.com", "inbox")])
+        let actions = Actions(store: s, outbox: Outbox(store: s))
+        try actions.spam([s.threads(box, .inbox)[0]])
+        #expect(s.threads(box, .inbox).isEmpty)
+        #expect(s.threads(box, .spam).map(\.id) == ["a"])
+        #expect(s.decision(account: gmail, email: "ann@x.com") == "blocked")
+        try actions.undoLast()
+        #expect(s.threads(box, .inbox).map(\.id) == ["a"])
+        #expect(s.decision(account: gmail, email: "ann@x.com") == "inbox")
+    }
+
+    @Test func mutedSendersLeaveInboxAndFeed() throws {
+        let s = try tempStore()
+        try s.upsert([msg("1", thread: "a", from: "news@x.com", list: true), msg("2", thread: "b", from: "ann@x.com")])
+        try place(s, [("news@x.com", "muted"), ("ann@x.com", "inbox")])
+        #expect(s.threads(box, .muted).map(\.id) == ["a"])
+        #expect(s.threads(box, .feed).isEmpty && s.threads(box, .newSenders).isEmpty)
+        #expect(s.threads(box, .inbox).map(\.id) == ["b"])
+    }
+}

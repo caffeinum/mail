@@ -301,12 +301,16 @@ public final class Store {
         // Every sender waits in New Senders until placed — unless gmail
         // already files them (mail/feed, mail/paper-trail labels).
         let placed = decided != nil && decided != "known"
-        let pending = !placed && !labelledStream && inbound != nil
+        let mutedLabel = labelID(account, name: Streams.muted).map(union.contains) ?? false
+        let pending = !placed && !labelledStream && !mutedLabel && inbound != nil
         let gone = (union.contains("TRASH") || union.contains("SPAM")) && !inInbox
         let labelled = (category == .feed && feedID.map(union.contains) == true)
             || (category == .paper && paperID.map(union.contains) == true)
         var view = ""
-        if gone || decided == "blocked" { view = "" }
+        let mutedID = labelID(account, name: Streams.muted)
+        if union.contains("SPAM") { view = "spam" }
+        else if gone || decided == "blocked" { view = "" }
+        else if decided == "muted" || (mutedID.map(union.contains) ?? false) { view = "muted" }
         else if pending && inInbox { view = "new" }
         else if category == .inbox && inInbox { view = "inbox" }
         else if category != .inbox && (inInbox || labelled) { view = category.rawValue }

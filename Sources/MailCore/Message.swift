@@ -130,7 +130,7 @@ public enum Category: String, CaseIterable {
 }
 
 public enum View: Equatable, Hashable {
-    case inbox, feed, paper, newSenders
+    case inbox, feed, paper, newSenders, spam, muted
     case search(String)
 
     public var key: String {
@@ -139,6 +139,8 @@ public enum View: Equatable, Hashable {
         case .feed: return "feed"
         case .paper: return "paper"
         case .newSenders: return "new"
+        case .spam: return "spam"
+        case .muted: return "muted"
         case .search: return "search"
         }
     }
@@ -149,6 +151,8 @@ public enum View: Equatable, Hashable {
         case .feed: return "Feed"
         case .paper: return "Paper Trail"
         case .newSenders: return "New Senders"
+        case .spam: return "Spam"
+        case .muted: return "Muted"
         case .search(let q): return "“\(q)”"
         }
     }
@@ -161,6 +165,8 @@ public enum View: Equatable, Hashable {
         case "feed": self = .feed
         case "paper": self = .paper
         case "new": self = .newSenders
+        case "spam": self = .spam
+        case "muted": self = .muted
         default: return nil
         }
     }
@@ -184,6 +190,8 @@ public struct ThreadSummary: Equatable, Hashable {
 public enum Streams {
     public static let feed = "mail/feed"
     public static let paper = "mail/paper-trail"
+    /// Not spam, just not wanted in sight: muted senders land here, read.
+    public static let muted = "mail/muted"
     public static func label(_ c: Category) -> String? {
         switch c { case .feed: return feed; case .paper: return paper; case .inbox: return nil }
     }

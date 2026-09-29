@@ -663,6 +663,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             case "f": go(.feed)
             case "p": go(.paper)
             case "n", "s": go(.newSenders)
+            case "x": go(.spam)
+            case "m": go(.muted)
             default: break
             }
             return true
@@ -696,9 +698,14 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "u": if reading { closeThread() }
         case "e": act("Done") { try actions.done($0) }
         case "#": act("Trashed") { try actions.trash($0) }
+        case "!":
+            let undoSpam = view == .spam
+            act(undoSpam ? "Not spam" : "Marked as spam") { try actions.spam($0, notSpam: undoSpam) }
         case "U": act("Toggled unread") { try actions.toggleUnread($0[0]) }
         case "z": undo()
         case "m": showMove()
+        case "M":
+            if let t = reading ? reader.thread : list.selected, !t.senderEmail.isEmpty { moveSender(t.senderEmail, to: "muted", title: "Muted") }
         case "i": loadImages(always: false)
         case "I": loadImages(always: true)
         case "/": startSearch()
