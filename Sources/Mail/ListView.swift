@@ -463,7 +463,7 @@ final class SenderRow: NSView {
             .font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: Palette.secondary,
         ])
         let name = NSMutableAttributedString(string: g.name, attributes: [
-            .font: g.unread ? Style.bold : Style.body, .foregroundColor: Palette.text,
+            .font: Style.body, .foregroundColor: Palette.text,
         ])
         if g.threads.count > 1 {
             name.append(NSAttributedString(string: "  \(g.threads.count)", attributes: [.font: Style.body, .foregroundColor: Palette.secondary]))
