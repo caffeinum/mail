@@ -449,7 +449,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             }
             return
         }
-        list.select(list.selectedIndex + d)
+        list.step(d)
     }
 
     /// The first j at the bottom of a thread only arms the move to the next.

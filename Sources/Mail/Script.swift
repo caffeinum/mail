@@ -35,7 +35,7 @@ enum Script {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { next(rest, main) }
     }
 
-    static let codes: [String: UInt16] = ["esc": 53, "return": 36, "down": 125, "up": 126, "space": 49]
+    static let codes: [String: UInt16] = ["esc": 53, "return": 36, "down": 125, "up": 126, "space": 49, "right": 124, "left": 123]
 
     private static func press(_ k: String, _ window: NSWindow) {
         var mods: NSEvent.ModifierFlags = []
@@ -43,7 +43,7 @@ enum Script {
         if key.hasPrefix("cmd-") { mods.insert(.command); key = String(key.dropFirst(4)) }
         if key.hasPrefix("ctrl-") { mods.insert(.control); key = String(key.dropFirst(5)) }
         let code = codes[key] ?? 0
-        let named = ["return": "\r", "esc": "\u{1b}", "space": " ", "down": "\u{F701}", "up": "\u{F700}"]
+        let named = ["return": "\r", "esc": "\u{1b}", "space": " ", "down": "\u{F701}", "up": "\u{F700}", "right": "\u{F703}", "left": "\u{F702}"]
         let chars = codes[key] != nil ? (named[key] ?? "") : key
         guard let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: mods, timestamp: ProcessInfo.processInfo.systemUptime,
                                        windowNumber: window.windowNumber, context: nil, characters: chars,
