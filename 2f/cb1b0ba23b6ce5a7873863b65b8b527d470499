@@ -1,0 +1,28 @@
+Sources/MailCore/Accounts.swift
+  s_f86aa9fa11a3e8::t_2d68b7336b9895 96-97
+Sources/MailCore/Store.swift
+  s_f86aa9fa11a3e8::t_2d68b7336b9895 28,33
+  s_f86aa9fa11a3e8::t_914679432c6bac 370
+Sources/MailCore/Message.swift
+  s_f86aa9fa11a3e8::t_2d68b7336b9895 86-95
+Tests/MailCoreTests/ParsingTests.swift
+  s_f86aa9fa11a3e8::t_2d68b7336b9895 80-93
+Sources/MailCore/Sorter.swift
+  s_f86aa9fa11a3e8::t_34b0603578a969 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2fcb1b0ba23b6ce5a7873863b65b8b527d470499",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
