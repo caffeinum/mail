@@ -43,7 +43,8 @@ enum Script {
         if key.hasPrefix("cmd-") { mods.insert(.command); key = String(key.dropFirst(4)) }
         if key.hasPrefix("ctrl-") { mods.insert(.control); key = String(key.dropFirst(5)) }
         let code = codes[key] ?? 0
-        let chars = codes[key] != nil ? (key == "return" ? "\r" : key == "esc" ? "\u{1b}" : key == "space" ? " " : "") : key
+        let named = ["return": "\r", "esc": "\u{1b}", "space": " ", "down": "\u{F701}", "up": "\u{F700}"]
+        let chars = codes[key] != nil ? (named[key] ?? "") : key
         guard let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: mods, timestamp: ProcessInfo.processInfo.systemUptime,
                                        windowNumber: window.windowNumber, context: nil, characters: chars,
                                        charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code) else { return }

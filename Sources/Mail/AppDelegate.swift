@@ -53,7 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             engine.onChange = { [weak self] a in self?.main.cacheChanged(account: a) }
             engine.onAccountsChanged = { [weak self] in self?.main.accountsChanged() }
             engine.onError = { [weak self] a, e in self?.main.syncFailed(account: a, error: e) }
-            engine.start()
+            // A demo cache (POST_DEMO) never talks to gmail: screenshots only.
+            if ProcessInfo.processInfo.environment["POST_DEMO"] == nil { engine.start() }
             main.prefetchVisible()
             Script.run(main)
             if engine.store.config.accounts.isEmpty { openSettings(nil) }

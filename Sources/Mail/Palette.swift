@@ -27,6 +27,7 @@ final class PaletteOverlay: Overlay, NSTableViewDataSource, NSTableViewDelegate,
         table.delegate = self
         table.style = .plain
         table.backgroundColor = .clear
+        table.selectionHighlightStyle = .regular
         table.target = self
         table.action = #selector(clicked)
         let scroll = NSScrollView()
@@ -89,7 +90,7 @@ final class PaletteOverlay: Overlay, NSTableViewDataSource, NSTableViewDelegate,
         let q = field.stringValue.lowercased().split(separator: " ")
         shown = q.isEmpty ? all : all.filter { c in q.allSatisfy { c.title.lowercased().contains($0) } }
         table.reloadData()
-        if !shown.isEmpty { table.selectRowIndexes([0], byExtendingSelection: false) }
+        if !shown.isEmpty { table.selectRowIndexes([0], byExtendingSelection: false); table.scrollRowToVisible(0) }
     }
 
     @objc private func clicked() { run() }
@@ -102,13 +103,21 @@ final class PaletteOverlay: Overlay, NSTableViewDataSource, NSTableViewDelegate,
         cmd.run()
     }
 
+    /// Arrows move the highlight and keep it in view, wrapping at the ends.
+    private func move(_ d: Int) {
+        guard !shown.isEmpty else { return }
+        let i = (table.selectedRow + d + shown.count) % shown.count
+        table.selectRowIndexes([i], byExtendingSelection: false)
+        table.scrollRowToVisible(i)
+    }
+
     func controlTextDidChange(_ obj: Notification) { filter() }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
         switch sel {
         case #selector(NSResponder.insertNewline(_:)): run(); return true
-        case #selector(NSResponder.moveDown(_:)): table.selectRowIndexes([min(table.selectedRow + 1, shown.count - 1)], byExtendingSelection: false); return true
-        case #selector(NSResponder.moveUp(_:)): table.selectRowIndexes([max(table.selectedRow - 1, 0)], byExtendingSelection: false); return true
+        case #selector(NSResponder.moveDown(_:)): move(1); return true
+        case #selector(NSResponder.moveUp(_:)): move(-1); return true
         case #selector(NSResponder.cancelOperation(_:)): onClose?(); return true
         default: return false
         }

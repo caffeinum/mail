@@ -22,6 +22,7 @@ func usage() -> Never {
     mailctl bodies <n> [view]                prefetch bodies for the top 50 threads
     mailctl outbox                           queued and recent changes
     mailctl idle <email>                     watch the imap doorbell for 2 minutes
+    mailctl demo                             fill POST_HOME with made-up mail, for screenshots
     mailctl launchbench <Reply.app> [runs]    time from spawn until the window is on screen, seen from outside
     """)
     exit(2)
@@ -163,6 +164,63 @@ case "idle":
     print("idling on \(e)'s inbox for 2 minutes…")
     try await Task.sleep(nanoseconds: 120_000_000_000)
     bell.stop()
+
+case "demo":
+    guard ProcessInfo.processInfo.environment["POST_HOME"] != nil else { fail("set POST_HOME to an empty folder first — demo never touches your real cache") }
+    let me = "you@example.com"
+    var demo = AccountsFile(accounts: [AccountConfig(email: me, label: "personal", aliases: [AliasRule(address: "you@duck.com", label: "duck.com")]),
+                                       AccountConfig(email: "you@studio.dev", label: "work")])
+    try AccountsStore.save(demo)
+    config = demo
+    store.config = demo
+    let now = Int64(Date().timeIntervalSince1970 * 1000)
+    let h: Int64 = 3_600_000
+    var n = 0
+    func m(_ from: String, _ name: String, _ subject: String, _ snippet: String, ago: Int64, labels: [String] = ["INBOX"],
+           unread: Bool = false, list: Bool = false, html: String? = nil, text: String? = nil, account: String = me, thread: String? = nil) -> MessageRecord {
+        n += 1
+        return MessageRecord(account: account, id: "demo\(n)", threadID: thread ?? "t\(n)", date: now - ago * h,
+                             labels: labels + (unread ? ["UNREAD"] : []), from: Address(name: name, email: from),
+                             to: [Address(name: "You", email: account)], subject: subject, snippet: snippet,
+                             listUnsubscribe: list ? "<mailto:u@x>" : nil,
+                             bodyText: text, bodyHTML: html, hasBody: text != nil || html != nil)
+    }
+    let letter = "<div style=\"font:16px Georgia,serif;max-width:560px;margin:0 auto;color:#222\"><h1 style=\"font-size:28px\">The quiet internet</h1><p>This week: why the best tools feel like nothing at all, a short history of the inbox, and three apps that respect your attention.</p><p style=\"color:#666\">— Issue 42</p></div>"
+    var msgs = [
+        m("maya@northwind.dev", "Maya Chen", "Q4 planning — draft for review", "Attached the first pass, mostly the hiring section is still thin", ago: 1, unread: true,
+          text: "Hi!\n\nAttached the first pass. Mostly the hiring section is still thin — can you fill in the eng side before Thursday?\n\nThe infra number looks right to me. Let's review together on Friday.\n\n— Maya"),
+        m("jonas@weber.me", "Jonas Weber", "Re: dinner thursday?", "works for me, 7:30 at the usual place", ago: 2, unread: true, text: "works for me, 7:30 at the usual place"),
+        m("sam@ortiz.co", "Sam Ortiz", "Lease renewal", "Following up on the renewal paperwork, could you sign by Friday?", ago: 26, text: "Following up on the renewal paperwork."),
+        m("dana@kline.art", "Dana K.", "photos from the trip", "finally uploaded everything, link inside", ago: 30, text: "finally uploaded everything"),
+        m("alex@rivera.vc", "Alex Rivera", "Intro: you <> Northwind", "Looping you both in — I think you should talk", ago: 70, text: "Looping you both in."),
+        m("hello@quiet.news", "The Quiet Internet", "Issue 42: tools that feel like nothing", "why the best tools feel like nothing at all", ago: 3, labels: ["INBOX", "CATEGORY_UPDATES"], unread: true, list: true, html: letter),
+        m("editor@longread.io", "Longread", "Five things worth reading this week", "an essay on attention, a lighthouse keeper, a map of ferries", ago: 20, labels: ["INBOX", "CATEGORY_PROMOTIONS"], list: true, html: letter),
+        m("events@lu.ma", "Luma", "You're invited: Design Systems Night", "Thursday 7pm, SoMa", ago: 28, labels: ["INBOX", "CATEGORY_UPDATES"], list: true),
+        m("receipts@stripe.com", "Acme via Stripe", "Your receipt from Acme #2041", "$49.00 paid", ago: 5, labels: ["INBOX", "CATEGORY_UPDATES"]),
+        m("no-reply@alaskaair.com", "Alaska Airlines", "Your flight is booked: SFO → SEA", "Confirmation code KX7PQ2", ago: 27, labels: ["INBOX", "CATEGORY_UPDATES"]),
+        m("orders@coffee.co", "Coffee Co.", "Your order has shipped", "Arrives Thursday", ago: 50, labels: ["INBOX", "CATEGORY_UPDATES"]),
+        m("notifications@deploys.dev", "Deploys", "Preview deployment failed for web", "build error in app/page.tsx", ago: 4, labels: ["INBOX", "CATEGORY_UPDATES"], unread: true),
+        m("billing@scooters.app", "Scooters", "Update your payment method", "your last payment couldn't be completed", ago: 22, labels: ["INBOX", "CATEGORY_UPDATES"]),
+        m("team@notes.app", "Notes", "Your trial ends in 3 days", "add a payment method to keep your notes", ago: 45, labels: ["INBOX", "CATEGORY_UPDATES"]),
+        m("riley@acme.io", "Riley Park", "Quick question about the API beta", "saw your post — are you still looking for testers?", ago: 6, unread: true, text: "Hi! Saw your post."),
+        m("hi@newtool.ai", "Newtool", "Introducing Newtool 2.0", "faster, calmer, and it finally has dark mode", ago: 9, labels: ["INBOX", "CATEGORY_UPDATES"], unread: true, list: true),
+        m("support@shop.eu", "Shop", "Your receipt from Shop", "€18.00", ago: 31, labels: ["INBOX", "CATEGORY_UPDATES"], unread: true),
+        m("team@studio.dev", "Studio", "Standup notes — Monday", "shipping the sidebar, fixing the sorter", ago: 2, unread: true, text: "Standup notes.", account: "you@studio.dev"),
+        m("lee@client.com", "Lee Walsh", "Re: proposal v3", "Looks great, one question on the timeline", ago: 7, unread: true, text: "Looks great.", account: "you@studio.dev"),
+    ]
+    var duckMsg = m("support_at_hey.example_you@duck.com", "Hey", "Verify your backup email", "One tap and you're done", ago: 8, labels: ["INBOX", "CATEGORY_UPDATES"], unread: true)
+    duckMsg.duckTo = "you@duck.com"; duckMsg.duckFrom = Address(name: "HEY", email: "support@hey.example")
+    msgs.append(duckMsg)
+    try store.upsert(msgs)
+    for (e, d) in [("maya@northwind.dev", "inbox"), ("jonas@weber.me", "inbox"), ("sam@ortiz.co", "inbox"), ("dana@kline.art", "inbox"),
+                   ("alex@rivera.vc", "inbox"), ("hello@quiet.news", "feed"), ("editor@longread.io", "feed"), ("events@lu.ma", "feed"),
+                   ("receipts@stripe.com", "paper"), ("no-reply@alaskaair.com", "paper"), ("orders@coffee.co", "paper"),
+                   ("notifications@deploys.dev", "notify"), ("billing@scooters.app", "notify"), ("team@notes.app", "notify")] {
+        try store.decide(account: me, email: e, decision: d)
+    }
+    for e in ["team@studio.dev", "lee@client.com"] { try store.decide(account: "you@studio.dev", email: e, decision: "inbox") }
+    _ = demo.adopt([:])
+    print("demo mail in \(Paths.support.path): \(msgs.count) messages")
 
 case "launchbench":
     guard let app = args.first else { usage() }
