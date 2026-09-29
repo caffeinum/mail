@@ -223,11 +223,17 @@ final class FeedStream: NSView {
           window.scrollTo({ top: top, behavior: smooth ? 'smooth' : 'instant' });
           return cur;
         }
-        // The email whose top is at or above a line near the top of the view.
+        // The email you're looking at: the one under a line a third of the
+        // way down the view — so a card whose tail is still at the top
+        // doesn't keep the focus once the next one fills the screen.
         function here() {
-          const a = arts(); const y = window.scrollY + 60;
-          let i = 0; for (let j = 0; j < a.length; j++) if (a[j].offsetTop <= y) i = j;
-          return i;
+          const a = arts(); if (!a.length) return 0;
+          const line = window.scrollY + window.innerHeight / 3;
+          for (let j = 0; j < a.length; j++) {
+            const top = a[j].offsetTop, bottom = top + a[j].offsetHeight;
+            if (line < bottom) return j;
+          }
+          return a.length - 1;
         }
         function step(d) { return go(here() + d, true); }
         """
