@@ -1,0 +1,21 @@
+Sources/Mail/Script.swift
+  s_f86aa9fa11a3e8::t_7de41c5c48e64c 38,46
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_ec0db02bd50214 452
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5b0bf089fa5789aa9cddcd7c852bb41138de9813",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
