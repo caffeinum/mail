@@ -69,7 +69,6 @@ public actor AccountSync {
         }
         let fetched = try await fetchThreads(ids, format: .metadata)
         try store.setHistoryID(account, profile.historyId)
-        if !store.isSeeded(account) { try store.seedSenders(account) }
         return Report(full: true, changed: ids.count, fetched: fetched)
     }
 

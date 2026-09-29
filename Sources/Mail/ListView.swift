@@ -56,6 +56,8 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
     private var tableRowOf: [Int] = []
     var onSelect: ((Int) -> Void)?
     var onOpen: ((Int) -> Void)?
+    /// In New Senders each row shows where it would go.
+    var suggest = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -156,6 +158,7 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
             return v
         case .thread(let i):
             let v = (tableView.makeView(withIdentifier: ThreadRow.id, owner: nil) as? ThreadRow) ?? ThreadRow()
+            v.suggest = suggest
             v.thread = rows[i]
             return v
         }
@@ -197,10 +200,13 @@ final class CursorRow: NSTableRowView {
 final class ThreadRow: NSView {
     static let id = NSUserInterfaceItemIdentifier("row")
     var thread: ThreadSummary? { didSet { needsDisplay = true } }
+    var suggest = false
 
     override init(frame: NSRect) { super.init(frame: frame); identifier = Self.id }
     required init?(coder: NSCoder) { fatalError() }
     override var isFlipped: Bool { true }
+
+    static let suggestion = ["inbox": "→ inbox", "feed": "→ feed", "paper": "→ paper trail"]
 
     static let dayFormat: DateFormatter = { let f = DateFormatter(); f.dateFormat = "MMM d"; return f }()
     static let timeFormat: DateFormatter = { let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none; return f }()
@@ -229,7 +235,7 @@ final class ThreadRow: NSView {
         path.stroke()
 
         let senderW: CGFloat = 170
-        let dateW: CGFloat = 70
+        var dateW: CGFloat = 70
         let y = (h - 17) / 2
         var sender = t.sender
         if t.count > 1 { sender += "  \(t.count)" }
@@ -244,6 +250,12 @@ final class ThreadRow: NSView {
             .font: Style.body, .foregroundColor: Palette.secondary,
         ]))
         line.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: line.length))
+        if suggest, let tag = Self.suggestion[t.category.rawValue] {
+            dateW += 110
+            (tag as NSString).draw(with: NSRect(x: col.maxX - dateW + 4, y: y + 1, width: 104, height: 18), options: .usesLineFragmentOrigin, attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 11.5, weight: .medium), .foregroundColor: Palette.accent,
+            ])
+        }
         let x = x0 + senderW
         line.draw(with: NSRect(x: x, y: y, width: col.maxX - x - dateW - 14, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
         let right = NSMutableParagraphStyle()

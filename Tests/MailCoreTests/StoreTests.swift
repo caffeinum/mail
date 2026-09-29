@@ -2,6 +2,12 @@ import Testing
 import Foundation
 @testable import MailCore
 
+/// Places senders the way a person would, so views can be tested past the
+/// New Senders queue.
+func place(_ s: Store, _ pairs: [(String, String)]) throws {
+    for (email, decision) in pairs { try s.decide(account: gmail, email: email, decision: decision) }
+}
+
 func tempStore(_ config: AccountsFile = AccountsFile(accounts: [AccountConfig(email: gmail, aliases: [duck])])) throws -> Store {
     let p = FileManager.default.temporaryDirectory.appendingPathComponent("post-test-\(UUID().uuidString).sqlite").path
     return try Store(path: p, config: config)
@@ -28,7 +34,12 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
             msg("3", thread: "c", from: "shop@y.com", subject: "your receipt", labels: ["INBOX", "CATEGORY_UPDATES"], date: 1),
             msg("4", thread: "d", from: "bob@z.com", date: 4, duck: true),
         ])
-        try s.seedSenders(gmail)
+        #expect(Set(s.threads(box, .newSenders).map(\.id)) == ["a", "b", "c"])
+        #expect(s.threads(duckBox, .newSenders).map(\.id) == ["d"])
+        #expect(s.threads(box, .inbox).isEmpty)
+        #expect(s.thread(account: gmail, id: "b")?.category == .feed)
+        #expect(s.thread(account: gmail, id: "c")?.category == .paper)
+        try place(s, [("ann@x.com", "inbox"), ("news@substack.com", "feed"), ("shop@y.com", "paper"), ("bob@z.com", "inbox")])
         #expect(s.threads(box, .inbox).map(\.id) == ["a"])
         #expect(s.threads(box, .feed).map(\.id) == ["b"])
         #expect(s.threads(box, .paper).map(\.id) == ["c"])
@@ -36,12 +47,13 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         #expect(s.threads(duckBox, .inbox).first?.sender == "bob@z.com")
     }
 
-    @Test func machinesSkipScreeningPeopleDont() throws {
+    @Test func everyoneWaitsThenFollowsTheirPlacement() throws {
         let s = try tempStore()
-        try s.seedSenders(gmail)
         var alert = msg("1", thread: "a", from: "notifications@vercel.com", subject: "Preview deployment failed", labels: ["INBOX", "CATEGORY_UPDATES"])
         alert.autoSubmitted = "auto-generated"
         try s.upsert([alert, msg("2", thread: "b", from: "jane@startup.io", subject: "coffee next week?")])
+        #expect(Set(s.threads(box, .newSenders).map(\.id)) == ["a", "b"])
+        try place(s, [("notifications@vercel.com", "paper")])
         #expect(s.threads(box, .paper).map(\.id) == ["a"])
         #expect(s.threads(box, .newSenders).map(\.id) == ["b"])
         try s.upsert([msg("3", thread: "c", from: "notifications@vercel.com", subject: "Action required: update your payment method",
@@ -55,13 +67,14 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
             msg("1", thread: "a", from: "orders@shop.com", subject: "Your receipt", labels: ["INBOX", "CATEGORY_UPDATES"], date: 1),
             msg("2", thread: "b", from: "orders@shop.com", subject: "Fall collection is here", labels: ["INBOX", "CATEGORY_PROMOTIONS"], date: 2),
         ])
-        #expect(Set(s.threads(box, .paper).map(\.id)) == ["a", "b"])
+        #expect(s.thread(account: gmail, id: "a")?.category == .paper)
+        #expect(s.thread(account: gmail, id: "b")?.category == .paper)
     }
 
     @Test func newSenderWaitsUntilDecided() throws {
         let s = try tempStore()
         try s.upsert([msg("1", thread: "a", from: "ann@x.com")])
-        try s.seedSenders(gmail)
+        try place(s, [("ann@x.com", "inbox")])
         try s.upsert([msg("2", thread: "b", from: "stranger@new.com", date: 5)])
         #expect(s.threads(box, .newSenders).map(\.id) == ["b"])
         #expect(!s.threads(box, .inbox).map(\.id).contains("b"))
@@ -96,7 +109,7 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
     @Test func doneThenUndoCancelsBeforeGmailHears() throws {
         let s = try tempStore()
         try s.upsert([msg("1", thread: "a", from: "ann@x.com")])
-        try s.seedSenders(gmail)
+        try place(s, [("ann@x.com", "inbox")])
         let box = Mailbox(account: gmail, kind: .gmail, title: "g")
         let outbox = Outbox(store: s)
         let actions = Actions(store: s, outbox: outbox)
@@ -112,7 +125,7 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
     @Test func undoAfterItWentOutQueuesTheInverse() throws {
         let s = try tempStore()
         try s.upsert([msg("1", thread: "a", from: "ann@x.com")])
-        try s.seedSenders(gmail)
+        try place(s, [("ann@x.com", "inbox")])
         let box = Mailbox(account: gmail, kind: .gmail, title: "g")
         let outbox = Outbox(store: s)
         let actions = Actions(store: s, outbox: outbox)
@@ -128,7 +141,7 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
     @Test func pendingChangeSurvivesAStaleSync() throws {
         let s = try tempStore()
         try s.upsert([msg("1", thread: "a", from: "ann@x.com")])
-        try s.seedSenders(gmail)
+        try place(s, [("ann@x.com", "inbox")])
         let box = Mailbox(account: gmail, kind: .gmail, title: "g")
         let outbox = Outbox(store: s)
         try Actions(store: s, outbox: outbox).done([s.threads(box, .inbox)[0]])

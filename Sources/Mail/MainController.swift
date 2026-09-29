@@ -182,7 +182,14 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             header.update(boxes: [], current: nil, view: view, counts: [:], note: "No accounts yet — ⌘, to add one")
             return
         }
-        list.set(store.threads(box, view, limit: 500), keep: id)
+        list.suggest = view == .newSenders
+        var rows = store.threads(box, view, limit: 500)
+        if view == .newSenders {
+            // One row per sender — their latest thread stands for them.
+            var seen = Set<String>()
+            rows = rows.filter { seen.insert($0.senderEmail).inserted }
+        }
+        list.set(rows, keep: id)
         if pane == nil { if streaming { showStream() } else if !reading { fill(content, with: list) } }
         var counts: [View: Int] = [:]
         for v in View.tabs { counts[v] = store.count(box, v) }
@@ -539,6 +546,20 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         toast.show("Renamed to \(name)")
     }
 
+    /// Everyone waiting in New Senders goes where the sorter would put them.
+    func placeAllAsSuggested() {
+        guard let box else { return }
+        var seen = Set<String>()
+        let picks = store.threads(box, .newSenders, limit: 5000).compactMap { t -> (email: String, category: String)? in
+            guard !t.senderEmail.isEmpty, seen.insert(t.senderEmail).inserted else { return nil }
+            return (t.senderEmail, t.category.rawValue)
+        }
+        guard !picks.isEmpty else { toast.show("No one is waiting"); return }
+        do { try actions.decideMany(account: box.account, picks) } catch { toast.show("\(error)"); return }
+        reloadList()
+        toast.show("Placed \(picks.count) senders as suggested  ·  z to undo")
+    }
+
     func toggleHelp() {
         if overlay is HelpOverlay { closeOverlay() } else { showOverlay(HelpOverlay()) }
     }
@@ -690,6 +711,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "f": decide("feed")
         case "p": decide("paper")
         case "x": decide("blocked")
+        case "y": if view == .newSenders, let t = list.selected { decide(t.category.rawValue) }
         case "1", "2", "3", "4", "5", "6", "7", "8", "9": switchBox(Int(ch)! - 1)
         default: return false
         }

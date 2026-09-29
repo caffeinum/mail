@@ -80,6 +80,22 @@ public final class Actions {
         undo.append(e)
     }
 
+    /// Places many senders at once — one undo step for the lot.
+    public func decideMany(account: String, _ decisions: [(email: String, category: String)]) throws {
+        var e = Entry(title: "Placed \(decisions.count) senders", outbox: [], restore: [])
+        for (email, category) in decisions {
+            let prior = store.senderRow(account: account, email: email)
+            try store.decide(account: account, email: email, decision: category)
+            let id = try outbox.enqueue(account, .sort(email: email, category: category), delay: grace)
+            e.outbox.append((id, account, []))
+            e.restore.append { [store] in
+                if let prior { try store.decide(account: account, email: email, decision: prior.decision, filterID: prior.filterID) }
+                else { try store.undecide(account: account, email: email) }
+            }
+        }
+        undo.append(e)
+    }
+
     public func title(for category: String) -> String {
         switch category {
         case "feed": return "Moved to Feed"

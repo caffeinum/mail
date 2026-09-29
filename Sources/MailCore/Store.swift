@@ -25,11 +25,15 @@ public final class Store {
         }
     }
 
-    public static let schemaVersion = 4
+    public static let schemaVersion = 5
 
     private func migrate() throws {
         let v = try db.scalar("PRAGMA user_version")
         guard v < Self.schemaVersion else { return }
+        if v >= 1 && v < 5 {
+            // v5: nobody is "known" by default any more; they wait to be placed.
+            try db.exec("DELETE FROM senders WHERE decision='known'")
+        }
         if v >= 1 && v < 4 {
             // v3: Duck-Original-To kept as the bare alias address, not the raw header.
             try db.transaction {
@@ -101,14 +105,6 @@ public final class Store {
             INSERT INTO accounts(email, history_id, synced_at) VALUES(?,?,?)
             ON CONFLICT(email) DO UPDATE SET history_id=excluded.history_id, synced_at=excluded.synced_at
             """, account, id, Int64(Date().timeIntervalSince1970))
-    }
-
-    public func isSeeded(_ account: String) -> Bool {
-        ((try? db.scalar("SELECT seeded FROM accounts WHERE email=?", account)) ?? 0) == 1
-    }
-
-    public func markSeeded(_ account: String) throws {
-        try db.run("INSERT INTO accounts(email, seeded) VALUES(?,1) ON CONFLICT(email) DO UPDATE SET seeded=1", account)
     }
 
     /// Drops everything cached for an account (removed from the app, or a
@@ -293,6 +289,7 @@ public final class Store {
         let paperID = labelID(account, name: Streams.paper)
         let decided = senderEmail.isEmpty ? nil : decision(account: account, email: senderEmail)
         var category: Category
+        let labelledStream = (feedID.map(union.contains) ?? false) || (paperID.map(union.contains) ?? false)
         if let feedID, union.contains(feedID) { category = .feed }
         else if let paperID, union.contains(paperID) { category = .paper }
         else if let d = decided, let c = Category(rawValue: d) { category = c }
@@ -301,8 +298,10 @@ public final class Store {
 
         // A request to act reaches the inbox whatever stream its sender has.
         if category != .inbox, decided != "blocked", let inbound, Sorter.needsAction(inbound) { category = .inbox }
-        // People wait to be let in; machines don't.
-        let pending = decided == nil && category == .inbox && inbound.map { !Sorter.isRobot($0) } == true
+        // Every sender waits in New Senders until placed — unless gmail
+        // already files them (mail/feed, mail/paper-trail labels).
+        let placed = decided != nil && decided != "known"
+        let pending = !placed && !labelledStream && inbound != nil
         let gone = (union.contains("TRASH") || union.contains("SPAM")) && !inInbox
         let labelled = (category == .feed && feedID.map(union.contains) == true)
             || (category == .paper && paperID.map(union.contains) == true)
@@ -342,7 +341,9 @@ public final class Store {
 
     public func count(_ box: Mailbox, _ view: View) -> Int {
         let alias = box.alias?.address.lowercased() ?? ""
-        return (try? db.scalar("SELECT count(*) FROM threads WHERE account=? AND alias=? AND view=?", box.account, alias, view.key)) ?? 0
+        // New Senders counts people, not threads: you decide once per sender.
+        let what = view == .newSenders ? "count(DISTINCT sender_email)" : "count(*)"
+        return (try? db.scalar("SELECT \(what) FROM threads WHERE account=? AND alias=? AND view=?", box.account, alias, view.key)) ?? 0
     }
 
     public func thread(account: String, id: String) -> ThreadSummary? {
@@ -403,28 +404,7 @@ public final class Store {
         (try? db.scalar("SELECT count(*) FROM senders WHERE account=?", account)) ?? 0
     }
 
-    /// First sync: everyone already in the mailbox (or someone we've written
-    /// to) counts as known, so the new-sender queue starts empty and only
-    /// fills with people who write for the first time from here on.
-    public func seedSenders(_ account: String) throws {
-        let now = Int64(Date().timeIntervalSince1970)
-        try db.transaction {
-            let mine = me(account)
-            var emails = Set(try db.query("SELECT DISTINCT sender_email FROM threads WHERE account=? AND sender_email<>''", account) { $0.text(0) })
-            for row in try db.query("SELECT to_json, cc_json FROM messages WHERE account=? AND labels LIKE '% SENT %'", account, map: {
-                ($0.string(0), $0.string(1))
-            }) {
-                for a in (unjson(row.0, [Address].self) ?? []) + (unjson(row.1, [Address].self) ?? []) { emails.insert(a.normalized) }
-            }
-            for e in emails where !mine.contains(e) {
-                try db.run("INSERT OR IGNORE INTO senders(account,email,decision,decided_at) VALUES(?,?,'known',?)", account, e, now)
-            }
-            try db.run("INSERT INTO accounts(email, seeded) VALUES(?,1) ON CONFLICT(email) DO UPDATE SET seeded=1", account)
-            try recompute(Set(try db.query("SELECT id FROM threads WHERE account=?", account) { account + "\u{1}" + $0.text(0) }))
-        }
-    }
-
-    /// decision: "inbox", "feed", "paper", "blocked" or "known".
+    /// decision: "inbox", "feed", "paper" or "blocked".
     public func decide(account: String, email: String, decision: String, filterID: String? = nil) throws {
         try db.transaction {
             try db.run("""
