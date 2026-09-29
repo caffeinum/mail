@@ -35,14 +35,16 @@ final class HeaderBar: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         account.isBordered = false
-        account.font = .systemFont(ofSize: 13, weight: .semibold)
+        account.font = Self.mono
         account.target = self
         account.action = #selector(pickAccount)
-        tabs.spacing = 18
-        note.font = .systemFont(ofSize: 11)
-        note.textColor = .secondaryLabelColor
-        title.font = .systemFont(ofSize: 15, weight: .semibold)
-        bar = NSStackView(views: [title, account, tabs, NSView(), note])
+        tabs.spacing = 16
+        note.font = Self.mono
+        note.textColor = Palette.secondary
+        title.font = .monospacedSystemFont(ofSize: 13, weight: .bold)
+        title.textColor = Palette.text
+        title.stringValue = "reply"
+        bar = NSStackView(views: [title, tabs, NSView(), note, account])
         bar.spacing = 20
         bar.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: Style.gutter)
         bar.translatesAutoresizingMaskIntoConstraints = false
@@ -57,28 +59,39 @@ final class HeaderBar: NSView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    static let mono = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
+    static let short: [View: String] = [.inbox: "inbox", .feed: "feed", .paper: "paper", .newSenders: "new"]
+
+    /// U4's bar: `reply  [inbox 7]  feed 31  paper 12  new 2`, the stream
+    /// you're in bracketed in ember; the account and sync state on the right.
     func update(boxes: [Mailbox], current: Mailbox?, view: View, counts: [View: Int], note text: String?) {
         self.boxes = boxes
-        account.title = current.map { "\($0.title) ▾" } ?? ""
+        account.attributedTitle = NSAttributedString(string: current.map { "\($0.title) ▾" } ?? "", attributes: [
+            .font: Self.mono, .foregroundColor: Palette.secondary,
+        ])
         account.isHidden = boxes.isEmpty || sidebarShown
-        tabs.isHidden = sidebarShown
-        title.isHidden = !sidebarShown
-        title.stringValue = view.title
-        leadInset?.constant = sidebarShown ? 28 : 84
+        title.isHidden = sidebarShown
+        leadInset?.constant = sidebarShown ? 26 : 84
         tabs.arrangedSubviews.forEach { $0.removeFromSuperview() }
         tabViews = View.tabs
         for (i, v) in View.tabs.enumerated() {
             let n = counts[v] ?? 0
-            var title = v.title
-            if v == .newSenders { if n == 0 { continue }; title += " \(n)" }
-            let b = NSButton(title: title, target: self, action: #selector(tab(_:)))
+            if v == .newSenders && n == 0 { continue }
+            let on = v == view
+            let label = "\(Self.short[v] ?? v.title) \(n)"
+            let b = NSButton(title: label, target: self, action: #selector(tab(_:)))
             b.tag = i
             b.isBordered = false
-            let on = v == view
-            b.attributedTitle = NSAttributedString(string: title, attributes: [
-                .font: NSFont.systemFont(ofSize: 13, weight: on ? .semibold : .regular),
-                .foregroundColor: on ? NSColor.labelColor : NSColor.secondaryLabelColor,
+            b.attributedTitle = NSAttributedString(string: on ? "[\(label)]" : label, attributes: [
+                .font: on ? NSFont.monospacedSystemFont(ofSize: 12.5, weight: .semibold) : Self.mono,
+                .foregroundColor: on ? Palette.accent : (v == .newSenders ? Palette.text : Palette.secondary),
             ])
+            tabs.addArrangedSubview(b)
+        }
+        if case .search(let q) = view {
+            let b = NSTextField(labelWithString: "[/\(q)]")
+            b.font = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .semibold)
+            b.textColor = Palette.accent
             tabs.addArrangedSubview(b)
         }
         if case .search = view { search.isHidden = false }

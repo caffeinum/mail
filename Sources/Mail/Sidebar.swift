@@ -51,15 +51,7 @@ final class Sidebar: NSView {
             item.onRename = { [weak self] name in self?.onRename?(i, name) }
             add(item)
         }
-        stack.setCustomSpacing(14, after: stack.arrangedSubviews.last!)
-        stack.addArrangedSubview(heading("STREAMS"))
-        for v in View.tabs {
-            let n = counts[v] ?? 0
-            if v == .newSenders && n == 0 { continue }
-            let trailing: SidebarItem.Trailing = v == .newSenders ? .badge("\(n)") : .count(n > 0 ? "\(n)" : "")
-            let on: Bool = { if case .search = view { return false }; return v == view }()
-            add(SidebarItem(title: v.title, trailing: trailing, on: on) { [weak self] in self?.onStream?(v) })
-        }
+        // The streams live in the top bar (U4); the sidebar holds accounts.
     }
 
     private func add(_ v: NSView) {
