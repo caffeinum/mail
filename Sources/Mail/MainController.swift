@@ -685,6 +685,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             switch ch {
             case "g": list.select(0); if reading { openSelected() }; if streaming { stream.scroll(to: 0) }
             case "i": go(.inbox)
+            case "o": go(.notifications)
             case "f": go(.feed)
             case "p": go(.paper)
             case "n", "s": go(.newSenders)
@@ -741,6 +742,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "F": compose(.forward)
         case "a": decide("inbox")
         case "f": decide("feed")
+        case "n": decide("notify")
         case "p": decide("paper")
         case "x": decide("blocked")
         case "y": if view == .newSenders, let t = list.selected { decide(t.category.rawValue) }

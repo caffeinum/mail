@@ -58,7 +58,7 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         #expect(s.threads(box, .newSenders).map(\.id) == ["b"])
         try s.upsert([msg("3", thread: "c", from: "notifications@vercel.com", subject: "Action required: update your payment method",
                           labels: ["INBOX", "CATEGORY_UPDATES"], date: 9)])
-        #expect(s.threads(box, .inbox).map(\.id) == ["c"])
+        #expect(Set(s.threads(box, .paper).map(\.id)) == ["a", "c"])
     }
 
     @Test func sortingFollowsTheSender() throws {

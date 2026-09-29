@@ -122,6 +122,7 @@ public final class Actions {
         switch category {
         case "feed": return "Moved to Feed"
         case "paper": return "Moved to Paper Trail"
+        case "notify": return "Moved to Notifications"
         case "blocked": return "Blocked"
         case "muted": return "Muted"
         default: return "Let in"

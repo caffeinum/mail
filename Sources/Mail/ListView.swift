@@ -210,7 +210,7 @@ final class ThreadRow: NSView {
     required init?(coder: NSCoder) { fatalError() }
     override var isFlipped: Bool { true }
 
-    static let suggestion = ["inbox": "→ inbox", "feed": "→ feed", "paper": "→ paper trail"]
+    static let suggestion = ["inbox": "→ inbox", "notify": "→ notifications", "feed": "→ feed", "paper": "→ paper trail"]
 
     static let dayFormat: DateFormatter = { let f = DateFormatter(); f.dateFormat = "MMM d"; return f }()
     static let timeFormat: DateFormatter = { let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none; return f }()
@@ -261,8 +261,8 @@ final class ThreadRow: NSView {
             ])
         }
         if suggest, let tag = Self.suggestion[t.category.rawValue] {
-            dateW += 110
-            (tag as NSString).draw(with: NSRect(x: col.maxX - dateW + 4, y: y + 1, width: 104, height: 18), options: .usesLineFragmentOrigin, attributes: [
+            dateW += 124
+            (tag as NSString).draw(with: NSRect(x: col.maxX - dateW + 4, y: y + 1, width: 120, height: 18), options: .usesLineFragmentOrigin, attributes: [
                 .font: NSFont.monospacedSystemFont(ofSize: 11.5, weight: .medium), .foregroundColor: Palette.accent,
             ])
         }

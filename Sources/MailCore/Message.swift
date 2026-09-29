@@ -126,16 +126,17 @@ public struct MessageRecord: Equatable {
 }
 
 public enum Category: String, CaseIterable {
-    case inbox, feed, paper
+    case inbox, notify, feed, paper
 }
 
 public enum View: Equatable, Hashable {
-    case inbox, feed, paper, newSenders, spam, muted
+    case inbox, notifications, feed, paper, newSenders, spam, muted
     case search(String)
 
     public var key: String {
         switch self {
         case .inbox: return "inbox"
+        case .notifications: return "notify"
         case .feed: return "feed"
         case .paper: return "paper"
         case .newSenders: return "new"
@@ -148,6 +149,7 @@ public enum View: Equatable, Hashable {
     public var title: String {
         switch self {
         case .inbox: return "Inbox"
+        case .notifications: return "Notifications"
         case .feed: return "Feed"
         case .paper: return "Paper Trail"
         case .newSenders: return "New Senders"
@@ -157,11 +159,12 @@ public enum View: Equatable, Hashable {
         }
     }
 
-    public static let tabs: [View] = [.inbox, .feed, .paper, .newSenders]
+    public static let tabs: [View] = [.inbox, .notifications, .feed, .paper, .newSenders]
 
     public init?(key: String) {
         switch key {
         case "inbox": self = .inbox
+        case "notify": self = .notifications
         case "feed": self = .feed
         case "paper": self = .paper
         case "new": self = .newSenders
@@ -192,9 +195,10 @@ public struct ThreadSummary: Equatable, Hashable {
 public enum Streams {
     public static let feed = "mail/feed"
     public static let paper = "mail/paper-trail"
+    public static let notifications = "mail/notifications"
     /// Not spam, just not wanted in sight: muted senders land here, read.
     public static let muted = "mail/muted"
     public static func label(_ c: Category) -> String? {
-        switch c { case .feed: return feed; case .paper: return paper; case .inbox: return nil }
+        switch c { case .feed: return feed; case .paper: return paper; case .notify: return notifications; case .inbox: return nil }
     }
 }

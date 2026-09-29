@@ -289,15 +289,16 @@ public final class Store {
         let paperID = labelID(account, name: Streams.paper)
         let decided = senderEmail.isEmpty ? nil : decision(account: account, email: senderEmail)
         var category: Category
+        let notifyID = labelID(account, name: Streams.notifications)
         let labelledStream = (feedID.map(union.contains) ?? false) || (paperID.map(union.contains) ?? false)
+            || (notifyID.map(union.contains) ?? false)
         if let feedID, union.contains(feedID) { category = .feed }
+        else if let notifyID, union.contains(notifyID) { category = .notify }
         else if let paperID, union.contains(paperID) { category = .paper }
         else if let d = decided, let c = Category(rawValue: d) { category = c }
         else if inbound != nil, !senderEmail.isEmpty { category = senderCategory(account: account, email: senderEmail) }
         else { category = Sorter.guess(last) }
 
-        // A request to act reaches the inbox whatever stream its sender has.
-        if category != .inbox, decided != "blocked", let inbound, Sorter.needsAction(inbound) { category = .inbox }
         // Every sender waits in New Senders until placed — unless gmail
         // already files them (mail/feed, mail/paper-trail labels).
         let placed = decided != nil && decided != "known"
@@ -306,6 +307,7 @@ public final class Store {
         let gone = (union.contains("TRASH") || union.contains("SPAM")) && !inInbox
         let labelled = (category == .feed && feedID.map(union.contains) == true)
             || (category == .paper && paperID.map(union.contains) == true)
+            || (category == .notify && notifyID.map(union.contains) == true)
         var view = ""
         let mutedID = labelID(account, name: Streams.muted)
         if union.contains("SPAM") { view = "spam" }

@@ -59,6 +59,7 @@ public actor AccountSync {
         ("in:inbox", 200),
         ("label:\(Streams.feed.replacingOccurrences(of: "/", with: "-"))", 100),
         ("label:\(Streams.paper.replacingOccurrences(of: "/", with: "-"))", 100),
+        ("label:\(Streams.notifications.replacingOccurrences(of: "/", with: "-"))", 100),
         ("in:sent", 100),
         ("in:spam", 50),
     ]

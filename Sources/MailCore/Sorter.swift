@@ -1,24 +1,34 @@
 import Foundation
 
-/// Where mail goes when nobody has said. People go to the Inbox once let
-/// in (they wait in New Senders until then). Machines go by what they send:
-/// newsletters and promotions to the Feed, receipts and notifications —
-/// deploys, sign-ins, bookings, the record of things that happened — to the
-/// Paper Trail. A machine asking you to act (update a payment method, an
-/// account suspended, a code you're waiting for) reaches the Inbox. An
-/// explicit gmail label (mail/feed, mail/paper-trail) or a sender decision
-/// decides the stream; only a request to act gets past it.
+/// Where mail goes when nobody has said. People go to the Inbox (once let
+/// in). Machines go by what they send: receipts and payments to the Paper
+/// Trail; newsletters, announcements, come-back mail and event invitations
+/// to the Feed; everything else they send — trials, sign-ins, deploys,
+/// things to act on — to Notifications. An explicit gmail label or a sender
+/// decision always wins.
 public enum Sorter {
     /// Bump when the rules change: the cache re-sorts every thread on open.
-    public static let version = 10
+    public static let version = 11
 
+    /// Money moved or something was bought: the record you may need later.
     static let receiptWords = [
         "receipt", "invoice", "your order", "order confirm", "order #", "order no", "order number", "has shipped",
         "shipped", "out for delivery", "was delivered", "has been delivered", "payment received", "payment confirmation",
         "payment successful", "you paid", "you sent", "you've paid", "thanks for your payment", "thank you for your payment",
         "refund", "booking confirm", "reservation confirm", "your reservation", "your booking", "itinerary", "e-ticket",
         "your trip", "statement is ready", "bill is ready", "your bill", "subscription renewed", "renewal confirmation",
-        "purchase", "transaction", "tax document", "payout", "deposit received", "your flight is booked",
+        "purchase", "transaction", "tax document", "payout", "deposit", "withdrew", "transfer", "charged", "flight is booked",
+        "return request", "return confirmed",
+    ]
+
+    /// Reading, not doing: launches, digests, come-back pitches, events.
+    static let feedWords = [
+        "introducing", "announcing", "now available", "is now live", "new feature", "what's new", "whats new", "we've launched",
+        "just launched", "launch", "is here", "product update", "changelog", "release notes", "newsletter", "digest",
+        "this week", "weekly", "monthly", "roundup", "edition", "issue #", "spotlight",
+        "we miss you", "miss you", "come back", "still interested", "haven't seen you", "it's been a while", "welcome back",
+        "invited", "invitation", "you're invited", "join us", "webinar", "rsvp", "meetup", "event", "summit", "conference",
+        "livestream", "happy hour", "hackathon", "hacks", "register now", "save your seat", "demo day",
     ]
 
     static let robotLocals = ["noreply", "no-reply", "donotreply", "do-not-reply", "notifications", "notification",
@@ -40,6 +50,8 @@ public enum Sorter {
         "deploy", "failed", "build", "merged", "commit", "pull request", "review", "mentioned", "assigned", "comment",
         "invited", "sign-in", "sign in", "new device", "login", "alert", "report", "summary", "briefing", "confirmed",
         "scheduled", "reminder", "updated", "changed", "received", "approved", "completed", "joined", "shared",
+        "trial", "expir", "ending", "ends", "paused", "deleted", "deletion", "suspended", "verify", "verification", "code",
+        "password", "security", "account", "action required", "payment method", "renew", "limit", "usage", "quota",
     ]
 
     public static func needsAction(_ m: MessageRecord) -> Bool {
@@ -72,14 +84,19 @@ public enum Sorter {
             || labels.contains("CATEGORY_SOCIAL") || labels.contains("CATEGORY_FORUMS")
     }
 
+    public static func isFeedish(_ m: MessageRecord) -> Bool {
+        let text = m.subject.lowercased()
+        return feedWords.contains { text.contains($0) }
+    }
+
     public static func guess(_ m: MessageRecord) -> Category {
         let labels = Set(m.labels)
         guard isRobot(m) else { return .inbox }
-        if needsAction(m) { return .inbox }
         if isReceipt(m) { return .paper }
+        if isFeedish(m) { return .feed }
         if labels.contains("CATEGORY_PROMOTIONS") || labels.contains("CATEGORY_SOCIAL") || labels.contains("CATEGORY_FORUMS") { return .feed }
-        if isBulk(m) && !isEvent(m) { return .feed }
-        return .paper
+        if isBulk(m) && !isEvent(m) && !needsAction(m) { return .feed }
+        return .notify
     }
 
     /// Sorting follows the sender, not the single message: a sender whose
@@ -90,10 +107,7 @@ public enum Sorter {
         guard !messages.isEmpty else { return .inbox }
         var n: [Category: Int] = [:]
         for m in messages { n[guess(m), default: 0] += 1 }
-        let paper = n[.paper] ?? 0, feed = n[.feed] ?? 0, inbox = n[.inbox] ?? 0
-        if paper * 3 >= messages.count { return .paper }
-        if feed > inbox { return .feed }
-        if inbox > 0 { return .inbox }
-        return .feed
+        if (n[.paper] ?? 0) * 3 >= messages.count { return .paper }
+        return [Category.inbox, .notify, .feed].max { (n[$0] ?? 0) < (n[$1] ?? 0) } ?? .inbox
     }
 }
