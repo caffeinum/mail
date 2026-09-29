@@ -25,13 +25,16 @@ public final class Store {
         }
     }
 
-    public static let schemaVersion = 7
+    public static let schemaVersion = 8
     /// Bump when how threads are placed changes: the cache re-sorts on open.
-    public static let sortingVersion = 14
+    public static let sortingVersion = 15
 
     private func migrate() throws {
         let v = try db.scalar("PRAGMA user_version")
         guard v < Self.schemaVersion else { return }
+        if v >= 1 && v < 8 {
+            try db.exec("CREATE TABLE IF NOT EXISTS invites(account TEXT NOT NULL, thread_id TEXT NOT NULL, PRIMARY KEY(account, thread_id))")
+        }
         if v >= 1 && v < 7 {
             // v7: who took part in each thread, for the row.
             try? db.exec("ALTER TABLE threads ADD COLUMN people TEXT NOT NULL DEFAULT ''")
@@ -90,6 +93,7 @@ public final class Store {
             attempts INTEGER NOT NULL DEFAULT 0, error TEXT, created INTEGER NOT NULL, result TEXT);
         CREATE INDEX IF NOT EXISTS outbox_pending ON outbox(state, not_before);
         CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS invites(account TEXT NOT NULL, thread_id TEXT NOT NULL, PRIMARY KEY(account, thread_id));
         CREATE TABLE IF NOT EXISTS suggestions(
             account TEXT NOT NULL, email TEXT NOT NULL, category TEXT NOT NULL, confidence REAL NOT NULL,
             source TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(account, email));
@@ -185,6 +189,7 @@ public final class Store {
                       m.references.joined(separator: " "), m.listUnsubscribe, m.listID, m.precedence, m.autoSubmitted,
                       json(m.duckFrom), m.duckTo, m.bodyText, m.bodyHTML, m.hasBody, m.shownFrom?.normalized ?? ""])
                 try index(m)
+                if m.invite { try db.run("INSERT OR IGNORE INTO invites(account, thread_id) VALUES(?,?)", m.account, m.threadID) }
                 touched.insert(m.account + "\u{1}" + m.threadID)
             }
             try recompute(touched)
@@ -306,9 +311,12 @@ public final class Store {
             || (category == .notify && notifyID.map(union.contains) == true)
         var view = ""
         let mutedID = labelID(account, name: Streams.muted)
+        // Calendar invites file themselves: no screening, whoever sent them.
+        let invite = ((try? db.scalar("SELECT count(*) FROM invites WHERE account=? AND thread_id=?", account, id)) ?? 0) > 0
         if union.contains("SPAM") { view = "spam" }
         else if gone || decided == "blocked" { view = "" }
         else if decided == "muted" || (mutedID.map(union.contains) ?? false) { view = "muted" }
+        else if invite && inInbox { view = "calendar" }
         else if pending && inInbox { view = "new" }
         else if category == .inbox && inInbox { view = "inbox" }
         else if let category, category != .inbox, inInbox || labelled { view = category.rawValue }
@@ -356,9 +364,23 @@ public final class Store {
         return ("\(prefix)account=? AND \(prefix)alias=?", [box.account, box.alias?.address.lowercased() ?? ""])
     }
 
+    /// Threads gmail found carrying an invite (a `filename:ics` search).
+    public func markInvites(account: String, threads: [String]) throws {
+        guard !threads.isEmpty else { return }
+        try db.transaction {
+            for t in threads { try db.run("INSERT OR IGNORE INTO invites(account, thread_id) VALUES(?,?)", account, t) }
+        }
+        try recompute(account: account, threads: threads)
+    }
+
     public func threads(_ box: Mailbox, _ view: View, limit: Int = 200, offset: Int = 0) -> [ThreadSummary] {
         if case .search(let q) = view { return search(box, q, limit: limit) }
         let (w, args) = scope(box)
+        if view == .sent {
+            return (try? db.query("""
+                SELECT \(Self.cols) FROM threads WHERE \(w) AND labels LIKE '% SENT %' ORDER BY date DESC LIMIT ? OFFSET ?
+                """, args + [limit, offset], map: summary)) ?? []
+        }
         return (try? db.query("""
             SELECT \(Self.cols) FROM threads WHERE \(w) AND view=? ORDER BY date DESC LIMIT ? OFFSET ?
             """, args + [view.key, limit, offset], map: summary)) ?? []
@@ -368,6 +390,7 @@ public final class Store {
         // New Senders counts people, not threads: you decide once per sender.
         let what = view == .newSenders ? "count(DISTINCT account || sender_email)" : "count(*)"
         let (w, args) = scope(box)
+        if view == .sent { return (try? db.query("SELECT count(*) FROM threads WHERE \(w) AND labels LIKE '% SENT %'", args) { $0.int(0) }.first) ?? 0 }
         return (try? db.query("SELECT \(what) FROM threads WHERE \(w) AND view=?", args + [view.key]) { $0.int(0) }.first) ?? 0
     }
 

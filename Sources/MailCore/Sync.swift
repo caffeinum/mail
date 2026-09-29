@@ -51,6 +51,7 @@ public actor AccountSync {
             r.fetched += try await fetchThreads(refs.map(\.id), format: .metadata)
             store.set(key, "1")
         }
+        try await findInvites()
         r.ms = Int(Date().timeIntervalSince(t0) * 1000)
         return r
     }
@@ -79,6 +80,14 @@ public actor AccountSync {
         let fetched = try await fetchThreads(ids, format: .metadata)
         try store.setHistoryID(account, profile.historyId)
         return Report(full: true, changed: ids.count, fetched: fetched)
+    }
+
+    /// Invites don't show in metadata; one gmail search per sync finds them.
+    func findInvites() async throws {
+        let refs = try await gmail.threads(query: "filename:ics", max: 100).refs.map(\.id)
+        let missing = refs.filter { store.thread(account: account, id: $0) == nil }
+        if !missing.isEmpty { try await fetchThreads(missing, format: .metadata) }
+        try store.markInvites(account: account, threads: refs)
     }
 
     /// One more page of older mail for a query, picking up where the last

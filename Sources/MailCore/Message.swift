@@ -25,6 +25,8 @@ public struct MessageRecord: Equatable {
     public var bodyText: String?
     public var bodyHTML: String?
     public var hasBody: Bool
+    /// Carries a calendar invite (text/calendar part or an .ics attachment).
+    public var invite = false
 
     public init(account: String, id: String, threadID: String, historyID: Int64 = 0, date: Int64 = 0, labels: [String] = [],
                 from: Address? = nil, to: [Address] = [], cc: [Address] = [], replyTo: [Address] = [], subject: String = "",
@@ -95,6 +97,7 @@ public struct MessageRecord: Equatable {
         if let p = m.payload, p.parts != nil || p.body?.data != nil {
             var text: String?, html: String?
             Self.walk(p, text: &text, html: &html)
+            invite = Self.hasInvite(p)
             if text != nil || html != nil {
                 bodyText = text; bodyHTML = html; hasBody = true
             } else if p.mimeType?.hasPrefix("multipart/") == true || p.body?.data != nil {
@@ -126,6 +129,11 @@ public struct MessageRecord: Equatable {
         return ct[r.upperBound...].split(separator: ";").first.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\" ")) } ?? "utf-8"
     }
 
+    static func hasInvite(_ p: GmailPart) -> Bool {
+        if p.mimeType?.lowercased() == "text/calendar" || (p.filename ?? "").lowercased().hasSuffix(".ics") { return true }
+        return p.parts?.contains(where: hasInvite) ?? false
+    }
+
     static func walk(_ p: GmailPart, text: inout String?, html: inout String?) {
         if let parts = p.parts {
             for c in parts { walk(c, text: &text, html: &html) }
@@ -155,7 +163,7 @@ public enum Category: String, CaseIterable {
 }
 
 public enum View: Equatable, Hashable {
-    case inbox, notifications, feed, paper, newSenders, spam, muted
+    case inbox, notifications, feed, paper, newSenders, spam, muted, calendar, sent
     case search(String)
 
     public var key: String {
@@ -167,6 +175,8 @@ public enum View: Equatable, Hashable {
         case .newSenders: return "new"
         case .spam: return "spam"
         case .muted: return "muted"
+        case .calendar: return "calendar"
+        case .sent: return "sent"
         case .search: return "search"
         }
     }
@@ -180,11 +190,13 @@ public enum View: Equatable, Hashable {
         case .newSenders: return "New Senders"
         case .spam: return "Spam"
         case .muted: return "Muted"
+        case .calendar: return "Calendar"
+        case .sent: return "Sent"
         case .search(let q): return "“\(q)”"
         }
     }
 
-    public static let tabs: [View] = [.inbox, .feed, .paper, .notifications, .muted, .newSenders]
+    public static let tabs: [View] = [.inbox, .feed, .calendar, .paper, .notifications, .muted, .newSenders]
 
     public init?(key: String) {
         switch key {
@@ -195,6 +207,8 @@ public enum View: Equatable, Hashable {
         case "new": self = .newSenders
         case "spam": self = .spam
         case "muted": self = .muted
+        case "calendar": self = .calendar
+        case "sent": self = .sent
         default: return nil
         }
     }
