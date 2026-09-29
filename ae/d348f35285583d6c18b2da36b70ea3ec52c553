@@ -1,0 +1,19 @@
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_143656d459f176 833-835
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "aed348f35285583d6c18b2da36b70ea3ec52c553",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
