@@ -110,6 +110,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         header.sidebarShown = shown
         sidebar.onAccount = { [weak self] i in self?.switchBox(i) }
         sidebar.onStream = { [weak self] v in self?.go(v) }
+        sidebar.onRename = { [weak self] i, name in self?.rename(box: i, to: name) }
         Launch.mark("layout")
         fill(content, with: list)
         header.searchDelegate = self
@@ -520,6 +521,22 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             window.contentView?.layoutSubtreeIfNeeded()
         }, completionHandler: { [weak self] in if !show { self?.sidebar.isHidden = true } })
         reloadList(keep: list.selected?.id)
+    }
+
+    /// A new name for an account or alias, kept in accounts.json.
+    func rename(box i: Int, to name: String) {
+        guard boxes.indices.contains(i), var f = try? AccountsStore.load() else { return }
+        let b = boxes[i]
+        guard let a = f.accounts.firstIndex(where: { $0.email == b.account }) else { return }
+        if let alias = b.alias, let r = f.accounts[a].aliases.firstIndex(where: { $0.address == alias.address }) {
+            f.accounts[a].aliases[r].label = name
+        } else {
+            f.accounts[a].label = name
+        }
+        do { try AccountsStore.save(f) } catch { toast.show("Couldn't rename: \(error)"); return }
+        accountsChanged()
+        window.makeFirstResponder(reading ? reader : list.table)
+        toast.show("Renamed to \(name)")
     }
 
     func toggleHelp() {

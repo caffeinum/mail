@@ -7,6 +7,7 @@ final class Sidebar: NSView {
     static let width: CGFloat = 220
     var onAccount: ((Int) -> Void)?
     var onStream: ((View) -> Void)?
+    var onRename: ((Int, String) -> Void)?
     private let stack = NSStackView()
 
     override init(frame: NSRect) {
@@ -42,7 +43,10 @@ final class Sidebar: NSView {
         guard !boxes.isEmpty else { return }
         stack.addArrangedSubview(heading("ACCOUNTS"))
         for (i, b) in boxes.enumerated() {
-            add(SidebarItem(title: b.title, trailing: .key("⌃\(i + 1)"), on: b == current) { [weak self] in self?.onAccount?(i) })
+            let email = b.alias?.address ?? b.account
+            let item = SidebarItem(title: b.title, subtitle: b.title == email ? nil : email, trailing: .key("⌃\(i + 1)"), on: b == current) { [weak self] in self?.onAccount?(i) }
+            item.onRename = { [weak self] name in self?.onRename?(i, name) }
+            add(item)
         }
         stack.setCustomSpacing(14, after: stack.arrangedSubviews.last!)
         stack.addArrangedSubview(heading("STREAMS"))
@@ -75,19 +79,40 @@ final class Sidebar: NSView {
     }
 }
 
-final class SidebarItem: NSView {
+final class SidebarItem: NSView, NSTextFieldDelegate {
     enum Trailing { case key(String), count(String), badge(String) }
     private let action: () -> Void
     private let on: Bool
+    private let t: NSTextField
+    private let original: String
+    /// Double-click edits the name in place; ↩ keeps it, esc puts it back.
+    var onRename: ((String) -> Void)?
 
-    init(title: String, trailing: Trailing, on: Bool, action: @escaping () -> Void) {
+    init(title: String, subtitle: String? = nil, trailing: Trailing, on: Bool, action: @escaping () -> Void) {
         self.action = action
         self.on = on
+        original = title
+        t = NSTextField(labelWithString: title)
         super.init(frame: .zero)
         wantsLayer = true
-        let t = NSTextField(labelWithString: title)
         t.font = .systemFont(ofSize: 13, weight: on ? .semibold : .regular)
         t.lineBreakMode = .byTruncatingTail
+        t.delegate = self
+        let left: NSView
+        if let subtitle {
+            let sub = NSTextField(labelWithString: subtitle)
+            sub.font = .systemFont(ofSize: 11)
+            sub.textColor = Palette.secondary
+            sub.lineBreakMode = .byTruncatingMiddle
+            sub.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            let v = NSStackView(views: [t, sub])
+            v.orientation = .vertical
+            v.alignment = .leading
+            v.spacing = 0
+            left = v
+        } else {
+            left = t
+        }
         let right: NSView
         switch trailing {
         case .key(let k):
@@ -111,7 +136,7 @@ final class SidebarItem: NSView {
             l.layer?.masksToBounds = true
             right = l
         }
-        let s = NSStackView(views: [t, NSView(), right])
+        let s = NSStackView(views: [left, NSView(), right])
         s.translatesAutoresizingMaskIntoConstraints = false
         addSubview(s)
         NSLayoutConstraint.activate([
@@ -128,5 +153,33 @@ final class SidebarItem: NSView {
         layer?.backgroundColor = on ? Palette.line.cgColor : NSColor.clear.cgColor
     }
 
-    override func mouseDown(with event: NSEvent) { action() }
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2, onRename != nil { beginRename(); return }
+        action()
+    }
+
+    private func beginRename() {
+        t.isEditable = true
+        t.isBordered = false
+        t.drawsBackground = true
+        t.backgroundColor = Palette.background
+        t.focusRingType = .none
+        window?.makeFirstResponder(t)
+        t.currentEditor()?.selectAll(nil)
+    }
+
+    private func endRename(save: Bool) {
+        let name = t.stringValue.trimmingCharacters(in: .whitespaces)
+        t.isEditable = false
+        t.drawsBackground = false
+        if save, !name.isEmpty, name != original { onRename?(name) } else { t.stringValue = original }
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
+        if sel == #selector(NSResponder.insertNewline(_:)) { endRename(save: true); window?.makeFirstResponder(nil); return true }
+        if sel == #selector(NSResponder.cancelOperation(_:)) { endRename(save: false); window?.makeFirstResponder(nil); return true }
+        return false
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) { if t.isEditable { endRename(save: true) } }
 }
