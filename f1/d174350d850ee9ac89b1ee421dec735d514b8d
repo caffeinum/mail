@@ -1,0 +1,28 @@
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_a3e964e896b42d 296
+  s_f86aa9fa11a3e8::t_59a43cc6c6cca2 317
+  s_f86aa9fa11a3e8::t_073f45b63d9ee7 320,424
+  s_f86aa9fa11a3e8::t_4ae91f5ffb4534 281-282
+Sources/Mail/FeedStream.swift
+  s_f86aa9fa11a3e8::t_073f45b63d9ee7 127-128,130,132,134,230-237,240,250
+  s_f86aa9fa11a3e8::t_4ae91f5ffb4534 14-15,20,103,116,120-126,224-229
+  s_f86aa9fa11a3e8::t_a3e964e896b42d 108,129,131,133
+Sources/MailCore/Engine.swift
+  s_f86aa9fa11a3e8::t_59a43cc6c6cca2 125-127,129-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f1d174350d850ee9ac89b1ee421dec735d514b8d",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
