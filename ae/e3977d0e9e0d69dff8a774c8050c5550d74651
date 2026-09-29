@@ -1,0 +1,42 @@
+Sources/MailCore/Message.swift
+  s_f86aa9fa11a3e8::t_93efcfff352ca2 129,133,139,152,162,167,198,202
+Sources/MailCore/Store.swift
+  s_f86aa9fa11a3e8::t_93efcfff352ca2 292,294,296,310
+Sources/Mail/Palette.swift
+  s_f86aa9fa11a3e8::t_0356646d79b2eb 53
+Sources/MailCore/Outbox.swift
+  s_f86aa9fa11a3e8::t_93efcfff352ca2 192
+Tests/MailCoreTests/StoreTests.swift
+  s_f86aa9fa11a3e8::t_aa1282f4b2d7e2 61
+Sources/MailCore/Sync.swift
+  s_f86aa9fa11a3e8::t_0356646d79b2eb 62
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_0356646d79b2eb 688,745
+Tests/MailCoreTests/ParsingTests.swift
+  s_f86aa9fa11a3e8::t_aa1282f4b2d7e2 56-63
+Sources/MailCore/Actions.swift
+  s_f86aa9fa11a3e8::t_93efcfff352ca2 125
+Sources/Mail/ListView.swift
+  s_f86aa9fa11a3e8::t_0356646d79b2eb 213,264-265
+Sources/MailCore/Sorter.swift
+  s_f86aa9fa11a3e8::t_e5707b3c6820ee 53-54
+  s_f86aa9fa11a3e8::t_1cf67fb477a1f3 3-8,11,13,20-31,87-91,96,98-99,110-111
+Sources/Mail/Chrome.swift
+  s_f86aa9fa11a3e8::t_0356646d79b2eb 185-186,215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "aee3977d0e9e0d69dff8a774c8050c5550d74651",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
