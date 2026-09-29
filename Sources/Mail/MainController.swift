@@ -251,6 +251,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             self.stream.here { i in
                 self.selectStream(i)
                 self.markViewed(self.streamRows.prefix(i).map(\.id))
+                if i >= self.streamRows.count - 4 { self.topUpStream(force: true) }
             }
         }
     }
@@ -267,8 +268,17 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             // Already on screen: only take out what left; nothing moves.
             let present = Set(list.rows.map(\.id))
             streamRows.removeAll { !present.contains($0.id) }
+            if streamRows.isEmpty, !list.rows.isEmpty {
+                // Finished the page: start over with whatever's there now,
+                // new mail included.
+                feedOrder = nil
+                stream.invalidate()
+                showStream()
+                return
+            }
             let items = streamRows.map { FeedStream.Item(id: $0.id, sender: "", subject: "", when: "", html: "", cached: true) }
             stream.show(items, at: 0, images: streamImagesOn)
+            topUpStream()
             return
         }
         streamRows = orderedFeed()
@@ -285,6 +295,25 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     }
 
     private var streamImagesOn = false
+
+    private func feedItem(_ t: ThreadSummary) -> FeedStream.Item {
+        let last = store.messages(account: t.account, thread: t.id).last
+        return FeedStream.item(t, last, images: streamImages || last.map(imagesAllowed) == true,
+                               account: box?.isAll == true ? (boxFor(t)?.title ?? "") : "")
+    }
+
+    /// Keeps the stream fed from the bottom: the next emails of the Feed
+    /// that aren't on the page yet, and older mail from gmail past them.
+    private func topUpStream(force: Bool = false) {
+        guard stream.isDrawn else { return }
+        let shown = Set(streamRows.map(\.id))
+        let more = list.rows.filter { !shown.contains($0.id) }.prefix(20)
+        if !more.isEmpty, force || streamRows.count < 15 {
+            streamRows += more
+            stream.append(more.map(feedItem))
+        }
+        if more.count < 20 { loadOlder() }
+    }
 
     // MARK: engine callbacks
 

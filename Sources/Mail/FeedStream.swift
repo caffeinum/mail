@@ -106,6 +106,13 @@ final class FeedStream: NSView {
         }
     }
 
+    /// More emails at the bottom (older ones, or the next batch).
+    func append(_ items: [Item]) {
+        guard drawn, !items.isEmpty else { return }
+        ids += items.map(\.id)
+        run("append(\(json(items)))")
+    }
+
     func scroll(to i: Int) { run("go(\(i), true)") }
 
     /// j/k from wherever the reader has scrolled to, not from where the
@@ -190,22 +197,49 @@ final class FeedStream: NSView {
             aside .n { margin-top: 8px; }
             @media (max-width: 760px) { article { grid-template-columns: 1fr; } aside { position: static; order: -1; } }`;
           document.head.appendChild(css);
-          let group = null;
+          append(items);
+        }
+        function lastGroup() {
+          const hs = document.querySelectorAll('h6'); return hs.length ? hs[hs.length - 1].dataset.g : null;
+        }
+        function append(items) {
+          document.getElementById('end')?.remove();
+          let group = lastGroup();
           for (const it of items) {
             if (it.group && it.group !== group) {
-              const h = document.createElement('h6'); h.textContent = it.group.toUpperCase(); document.body.appendChild(h);
+              const h = document.createElement('h6'); h.textContent = it.group.toUpperCase(); h.dataset.g = it.group;
+              document.body.appendChild(h);
               group = it.group;
             }
             document.body.appendChild(card(it));
           }
+          ending();
+        }
+        // Nothing left: say so instead of a blank page.
+        function ending() {
+          if (arts().length || document.getElementById('end')) return;
+          const e = document.createElement('div'); e.id = 'end';
+          e.style.cssText = 'text-align:center;margin-top:30vh;color:\(dim);font-size:14px';
+          e.textContent = "You're all caught up on the Feed.";
+          document.body.appendChild(e);
         }
         // Take emails out where they stand; drop a day heading left empty.
+        // The email you were on (or the next one left, if it went) stays at
+        // the same spot on screen — cards removed above don't pull the page.
         function remove(ids) {
-          for (const id of ids) document.getElementById('t' + id)?.remove();
+          const gone = new Set(ids.map(id => 't' + id));
+          const a = arts(); const at = here();
+          const before = a.length ? a[at].getBoundingClientRect().top : 0;
+          let anchor = null;
+          for (let j = at; j < a.length; j++) if (!gone.has(a[j].id)) { anchor = a[j]; break; }
+          if (!anchor) for (let j = at - 1; j >= 0; j--) if (!gone.has(a[j].id)) { anchor = a[j]; break; }
+          for (const id of gone) document.getElementById(id)?.remove();
           for (const h of Array.from(document.querySelectorAll('h6'))) {
             const n = h.nextElementSibling;
             if (!n || n.tagName !== 'ARTICLE') h.remove();
           }
+          if (anchor) window.scrollBy({ top: anchor.getBoundingClientRect().top - before, behavior: 'instant' });
+          ending();
           return mark(here());
         }
         function arts() { return Array.from(document.querySelectorAll('article')); }
