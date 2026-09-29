@@ -398,6 +398,15 @@ public final class Store {
             """, account, minimum) { $0.text(0) }) ?? []
     }
 
+    /// Each sender's most recent thread date, done or not ("account\u{1}email" → ms).
+    public func senderLatest(_ box: Mailbox) -> [String: Int64] {
+        let (w, args) = scope(box)
+        let rows = (try? db.query("""
+            SELECT account, sender_email, max(date) FROM threads WHERE \(w) AND sender_email<>'' GROUP BY account, sender_email
+            """, args) { ($0.text(0) + "\u{1}" + $0.text(1), $0.int64(2)) }) ?? []
+        return Dictionary(rows, uniquingKeysWith: max)
+    }
+
     // MARK: jev
 
     /// Senders nobody has placed and Jev hasn't judged, newest first, each

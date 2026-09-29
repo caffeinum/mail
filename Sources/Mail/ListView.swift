@@ -152,6 +152,10 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
 
     /// Sections by proposed label, then senders (newest first), then — when
     /// unfolded — their threads.
+    /// Senders are ordered by their latest mail of any kind, so finishing one
+    /// of their threads doesn't send them sliding down the list.
+    var senderLatest: [String: Int64] = [:]
+
     func setGrouped(_ threads: [ThreadSummary], keep id: String?, keepSender: String? = nil) {
         keepingScroll { quiet = true; setGroupedNow(threads, keep: id, keepSender: keepSender); quiet = false }
     }
@@ -170,6 +174,8 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
             if byKey[k] == nil { order.append(k) }
             byKey[k, default: []].append(t)
         }
+        let latest = { (k: String) -> Int64 in self.senderLatest[k] ?? byKey[k]![0].date }
+        order.sort { latest($0) > latest($1) }
         rows = []
         groups = []
         for section in Self.sectionOrder {

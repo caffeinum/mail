@@ -197,6 +197,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         var rows = store.threads(box, view, limit: 20000)
         if view == .newSenders {
             list.expanded = Set((store.get("ui.ns.open") ?? "").split(separator: "\n").map(String.init))
+            list.senderLatest = store.senderLatest(box)
             list.setGrouped(rows, keep: id, keepSender: keepSender)
         } else {
             list.set(rows, keep: id)
