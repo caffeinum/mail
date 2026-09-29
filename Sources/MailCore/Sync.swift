@@ -81,6 +81,22 @@ public actor AccountSync {
         return Report(full: true, changed: ids.count, fetched: fetched)
     }
 
+    /// One more page of older mail for a query, picking up where the last
+    /// page stopped. Threads already cached are skipped. Returns false once
+    /// there's nothing older.
+    public func backfill(_ query: String = "in:inbox", pageSize: Int = 100) async throws -> Bool {
+        let key = "backfill.\(account).\(query)"
+        let token = store.get(key)
+        if token == "done" { return false }
+        let page = try await gmail.threads(query: query, max: pageSize, pageToken: token?.isEmpty == false ? token : nil)
+        let missing = page.refs.map(\.id).filter { store.thread(account: account, id: $0) == nil }
+        if !missing.isEmpty { try await fetchThreads(missing, format: .metadata) }
+        store.set(key, page.next ?? "done")
+        if missing.isEmpty && page.next != nil { return true }
+        log("\(account): backfilled \(missing.count) older threads for \(query)\(page.next == nil ? " — all cached" : "")")
+        return page.next != nil
+    }
+
     /// Fetches threads concurrently and writes them in batches as they land,
     /// so a list starts filling before the last request returns.
     @discardableResult

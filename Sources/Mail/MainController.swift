@@ -118,6 +118,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         header.onAccount = { [weak self] i in self?.switchBox(i) }
         list.onOpen = { [weak self] i in self?.list.select(i); self?.openSelected() }
         list.onSelect = { [weak self] _ in self?.prefetchAroundCursor() }
+        list.onNearEnd = { [weak self] in self?.loadOlder() }
     }
 
     private func fill(_ host: NSView, with v: NSView) {
@@ -329,6 +330,16 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         stream.invalidate()
         if case .search = view { view = lastTab }
         reloadList()
+    }
+
+    private var lastOlder = Date.distantPast
+
+    /// Near the bottom of a list: ask gmail for the next page of older mail.
+    func loadOlder() {
+        guard let box, Date().timeIntervalSince(lastOlder) > 2 else { return }
+        lastOlder = Date()
+        let accounts = box.isAll ? store.config.accounts.map(\.email) : [box.account]
+        for a in accounts { Task { await engine.older(a) } }
     }
 
     func boxFor(_ t: ThreadSummary) -> Mailbox? {

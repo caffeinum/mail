@@ -56,6 +56,8 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
     private var tableRowOf: [Int] = []
     var onSelect: ((Int) -> Void)?
     var onOpen: ((Int) -> Void)?
+    /// Called when the list is scrolled (or the cursor moved) near its end.
+    var onNearEnd: (() -> Void)?
     /// In New Senders each row shows where it would go.
     var suggest = false
     /// In the combined view each row names its account ("account\u{1}alias" → title).
@@ -84,6 +86,13 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
         drawsBackground = false
         automaticallyAdjustsContentInsets = false
         contentInsets = NSEdgeInsets(top: 6, left: 0, bottom: 24, right: 0)
+        contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: contentView)
+    }
+
+    @objc private func scrolled() {
+        let visible = contentView.bounds
+        if visible.maxY > table.bounds.height - visible.height { onNearEnd?() }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -169,7 +178,10 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { CursorRow() }
 
-    func tableViewSelectionDidChange(_ n: Notification) { onSelect?(selectedIndex) }
+    func tableViewSelectionDidChange(_ n: Notification) {
+        onSelect?(selectedIndex)
+        if selectedIndex >= rows.count - 15 { onNearEnd?() }
+    }
 }
 
 final class DayHeader: NSView {

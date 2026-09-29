@@ -70,11 +70,36 @@ public final class Engine: @unchecked Sendable {
                         }
                     }
                     await self.judge(account)
+                    await self.older(account)
                 }
             } catch {
                 log("\(account): sync failed: \(error)")
                 DispatchQueue.main.async { self.onError?(account, error) }
             }
+        }
+    }
+
+    private var paging = Set<String>()
+
+    /// Older mail, a page at a time: once per sync in the background until
+    /// the inbox is fully cached, and at once when the list nears its end.
+    public func older(_ account: String) async {
+        guard let s = syncs[account] else { return }
+        let start: Bool = await MainActor.run { paging.insert(account).inserted }
+        guard start else { return }
+        defer { Task { @MainActor in self.paging.remove(account) } }
+        do {
+            // Pages already in the cache cost one list call each; keep going
+            // until something older actually arrives (or there's no more).
+            for _ in 0..<20 {
+                let before = store.count(Mailbox(account: account, kind: .gmail, title: ""), .inbox)
+                guard try await s.backfill("in:inbox") else { break }
+                if store.count(Mailbox(account: account, kind: .gmail, title: ""), .inbox) != before { break }
+            }
+            DispatchQueue.main.async { self.onChange?(account) }
+            await judge(account)
+        } catch {
+            log("\(account): backfill failed, will retry next sync: \(error)")
         }
     }
 
