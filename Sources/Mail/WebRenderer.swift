@@ -54,11 +54,13 @@ final class WebRenderer: NSObject, WKNavigationDelegate {
     private var blockAll: WKContentRuleList?
     private var imagesOnly: WKContentRuleList?
 
-    /// Hosts and paths that exist to report an open. Blocked even when a
-    /// sender's images are let in.
-    static let trackers = ["open\\.", "/open", "/track", "pixel", "beacon", "doubleclick\\.net", "google-analytics\\.com",
-                           "mailtrack", "list-manage\\.com/track", "sendgrid\\.net/wf/open", "mandrillapp\\.com/track",
-                           "hubspot", "mixpanel", "sparkpost", "mailchimp\\.com/track", "/wf/open", "/e/o/", "emltrk", "trk\\."]
+    /// Open-tracking endpoints only — never a whole domain, or a sender's
+    /// real images go with it (HubSpot hosts both on hubspot hosts). 1×1
+    /// images are also stripped from the html before it's drawn.
+    static let trackers = ["doubleclick\\.net", "google-analytics\\.com/collect", "list-manage\\.com/track/open",
+                           "sendgrid\\.net/wf/open", "/wf/open", "mandrillapp\\.com/track/open", "hubspotlinks\\.com/Cto/",
+                           "/e/o/", "emltrk", "mailtrack\\.io", "/open\\.gif", "/open\\.php", "/track/open", "/pixel\\.gif",
+                           "sparkpostmail\\.com/q/", "mixpanel\\.com/track"]
 
     func prewarm() {
         view.loadHTMLString("<!doctype html><html><body></body></html>", baseURL: nil)
