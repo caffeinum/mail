@@ -1,0 +1,31 @@
+Sources/MailCore/Engine.swift
+  s_f86aa9fa11a3e8::t_3593dcf8d19bc6 72,81-99
+  s_f86aa9fa11a3e8::t_fd6a684813b744 47
+  s_f86aa9fa11a3e8::t_ee84c7c345a5b2 100-102
+Tests/MailCoreTests/ParsingTests.swift
+  s_f86aa9fa11a3e8::t_fd6a684813b744 99-125
+Sources/MailCore/Store.swift
+  s_f86aa9fa11a3e8::t_3593dcf8d19bc6 28,86-88,244-245,249-253,397-438
+  s_f86aa9fa11a3e8::t_368c3f669d6916 439
+Sources/mailctl/main.swift
+  s_f86aa9fa11a3e8::t_fd6a684813b744 25,169-178
+  s_f86aa9fa11a3e8::t_3e13bc61bcc863 179
+Sources/MailCore/Jev.swift
+  s_f86aa9fa11a3e8::t_b86231bb7772da 1-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f33e0743bcaa95913977992ec7bf40c93a66cd87",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
