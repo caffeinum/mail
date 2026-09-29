@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             WebRenderer.shared.prewarm()
             engine.onChange = { [weak self] a in self?.main.cacheChanged(account: a) }
             engine.onAccountsChanged = { [weak self] in self?.main.accountsChanged() }
+            engine.onPaging = { [weak self] a, on in self?.main.pagingChanged(account: a, active: on) }
             engine.onError = { [weak self] a, e in self?.main.syncFailed(account: a, error: e) }
             // A demo cache (POST_DEMO) never talks to gmail: screenshots only.
             if ProcessInfo.processInfo.environment["POST_DEMO"] == nil { engine.start() }

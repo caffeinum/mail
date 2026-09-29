@@ -185,7 +185,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         }
         list.suggest = view == .newSenders
         list.accountTags = box.isAll ? Dictionary(boxes.map { ($0.account + "\u{1}" + ($0.alias?.address.lowercased() ?? ""), $0.title) }, uniquingKeysWith: { a, _ in a }) : [:]
-        var rows = store.threads(box, view, limit: 500)
+        list.footer = olderFooter()
+        var rows = store.threads(box, view, limit: 20000)
         if view == .newSenders {
             // One row per sender — their latest thread stands for them.
             var seen = Set<String>()
@@ -333,13 +334,34 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     }
 
     private var lastOlder = Date.distantPast
+    private var pagingNow = Set<String>()
+
+    private var olderAccounts: [String] {
+        guard let box else { return [] }
+        if case .search = view { return [] }
+        return box.isAll ? store.config.accounts.map(\.email) : [box.account]
+    }
+
+    private func olderFooter() -> String? {
+        let accounts = olderAccounts
+        guard !accounts.isEmpty else { return nil }
+        if accounts.contains(where: pagingNow.contains) { return "Loading older mail…" }
+        return accounts.contains(where: engine.hasOlder) ? "Scroll for older mail" : "That's everything"
+    }
+
+    func pagingChanged(account: String, active: Bool) {
+        if active { pagingNow.insert(account) } else { pagingNow.remove(account) }
+        list.loading = !pagingNow.isEmpty
+        list.footer = olderFooter()
+        // Still at the bottom after a page landed: keep going.
+        if !active, list.nearEnd, !reading { lastOlder = .distantPast; loadOlder() }
+    }
 
     /// Near the bottom of a list: ask gmail for the next page of older mail.
     func loadOlder() {
-        guard let box, Date().timeIntervalSince(lastOlder) > 2 else { return }
+        guard Date().timeIntervalSince(lastOlder) > 0.5 else { return }
         lastOlder = Date()
-        let accounts = box.isAll ? store.config.accounts.map(\.email) : [box.account]
-        for a in accounts { Task { await engine.older(a) } }
+        for a in olderAccounts where engine.hasOlder(a) { Task { await engine.older(a) } }
     }
 
     func boxFor(_ t: ThreadSummary) -> Mailbox? {

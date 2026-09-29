@@ -48,7 +48,7 @@ enum Style {
 /// each. `rows` holds only threads; the headers live between them in the
 /// table and are never selectable.
 final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
-    enum Item { case header(String), thread(Int) }
+    enum Item { case header(String), thread(Int), footer }
 
     let table = NSTableView()
     private(set) var rows: [ThreadSummary] = []
@@ -58,6 +58,19 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
     var onOpen: ((Int) -> Void)?
     /// Called when the list is scrolled (or the cursor moved) near its end.
     var onNearEnd: (() -> Void)?
+    /// The last row: "loading older mail…" while paging, "that's everything" once done.
+    var footer: String? { didSet { if footer != oldValue { refreshFooter() } } }
+    var loading = false { didSet { if loading != oldValue { refreshFooter() } } }
+
+    var nearEnd: Bool {
+        let visible = contentView.bounds
+        return visible.maxY > table.bounds.height - visible.height
+    }
+
+    private func refreshFooter() {
+        guard let i = items.lastIndex(where: { if case .footer = $0 { return true }; return false }) else { return }
+        table.reloadData(forRowIndexes: [i], columnIndexes: [0])
+    }
     /// In New Senders each row shows where it would go.
     var suggest = false
     /// In the combined view each row names its account ("account\u{1}alias" → title).
@@ -90,10 +103,7 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: contentView)
     }
 
-    @objc private func scrolled() {
-        let visible = contentView.bounds
-        if visible.maxY > table.bounds.height - visible.height { onNearEnd?() }
-    }
+    @objc private func scrolled() { if nearEnd { onNearEnd?() } }
 
     required init?(coder: NSCoder) { fatalError() }
 
@@ -118,6 +128,7 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
             tableRowOf.append(items.count)
             items.append(.thread(i))
         }
+        if footer != nil { items.append(.footer) }
         table.reloadData()
         let target = id ?? prev?.id
         let idx = target.flatMap { t in rows.firstIndex { $0.id == t } } ?? min(max(0, selectedIndex), rows.count - 1)
@@ -154,11 +165,17 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
         return false
     }
 
-    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { !self.tableView(tableView, isGroupRow: row) }
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        if case .thread = items[row] { return true }
+        return false
+    }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        if case .header = items[row] { return row == 0 ? 30 : 40 }
-        return Style.rowHeight
+        switch items[row] {
+        case .header: return row == 0 ? 30 : 40
+        case .footer: return 56
+        case .thread: return Style.rowHeight
+        }
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -166,6 +183,10 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
         case .header(let title):
             let v = (tableView.makeView(withIdentifier: DayHeader.id, owner: nil) as? DayHeader) ?? DayHeader()
             v.title = title
+            return v
+        case .footer:
+            let v = (tableView.makeView(withIdentifier: LoaderRow.id, owner: nil) as? LoaderRow) ?? LoaderRow()
+            v.set(text: footer ?? "", spinning: loading)
             return v
         case .thread(let i):
             let v = (tableView.makeView(withIdentifier: ThreadRow.id, owner: nil) as? ThreadRow) ?? ThreadRow()
@@ -181,6 +202,34 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
     func tableViewSelectionDidChange(_ n: Notification) {
         onSelect?(selectedIndex)
         if selectedIndex >= rows.count - 15 { onNearEnd?() }
+    }
+}
+
+final class LoaderRow: NSView {
+    static let id = NSUserInterfaceItemIdentifier("loader")
+    private let spinner = NSProgressIndicator()
+    private let label = NSTextField(labelWithString: "")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        identifier = Self.id
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isDisplayedWhenStopped = false
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = Palette.secondary
+        let s = NSStackView(views: [spinner, label])
+        s.spacing = 8
+        s.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(s)
+        NSLayoutConstraint.activate([s.centerXAnchor.constraint(equalTo: centerXAnchor), s.centerYAnchor.constraint(equalTo: centerYAnchor)])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func set(text: String, spinning: Bool) {
+        label.stringValue = text
+        if spinning { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
     }
 }
 

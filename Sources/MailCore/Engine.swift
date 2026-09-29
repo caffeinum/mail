@@ -17,6 +17,11 @@ public final class Engine: @unchecked Sendable {
     /// Called on the main queue when the engine itself changed accounts.json
     /// (an alias found in the mail).
     public var onAccountsChanged: (() -> Void)?
+    /// Called on the main queue when paging back through old mail starts or stops.
+    public var onPaging: ((String, Bool) -> Void)?
+
+    /// Whether gmail may still have older inbox mail for this account.
+    public func hasOlder(_ account: String) -> Bool { store.get("backfill.\(account).in:inbox") != "done" }
 
     public init(store: Store) {
         self.store = store
@@ -87,7 +92,8 @@ public final class Engine: @unchecked Sendable {
         guard let s = syncs[account] else { return }
         let start: Bool = await MainActor.run { paging.insert(account).inserted }
         guard start else { return }
-        defer { Task { @MainActor in self.paging.remove(account) } }
+        DispatchQueue.main.async { self.onPaging?(account, true) }
+        defer { Task { @MainActor in self.paging.remove(account); self.onPaging?(account, false) } }
         do {
             // Pages already in the cache cost one list call each; keep going
             // until something older actually arrives (or there's no more).
