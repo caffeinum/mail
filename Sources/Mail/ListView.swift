@@ -153,6 +153,10 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
     /// Sections by proposed label, then senders (newest first), then — when
     /// unfolded — their threads.
     func setGrouped(_ threads: [ThreadSummary], keep id: String?, keepSender: String? = nil) {
+        keepingScroll { quiet = true; setGroupedNow(threads, keep: id, keepSender: keepSender); quiet = false }
+    }
+
+    private func setGroupedNow(_ threads: [ThreadSummary], keep id: String?, keepSender: String? = nil) {
         let prevKey = keepSender ?? selectedGroup.map { groups[$0].key }
         let prevID = id ?? (selectedRowIsThread ? selected?.id : nil)
         // A multi-sender selection (⌘A) survives a reload.
@@ -273,9 +277,30 @@ final class ListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
         } while true
     }
 
+    /// A reload (new mail, an older page landing) keeps the list where you
+    /// were looking; only moving the cursor scrolls.
+    private func keepingScroll(_ body: () -> Void) {
+        let origin = contentView.bounds.origin
+        body()
+        contentView.scroll(to: origin)
+        reflectScrolledClipView(contentView)
+    }
+
     private var quiet = false
 
+    /// A different list (another stream or account): start from the cursor.
+    func scrollToCursor() {
+        let r = table.selectedRowIndexes.last ?? 0
+        guard items.indices.contains(r) else { return }
+        table.scrollRowToVisible(r > 0 && { if case .header = items[r - 1] { return true }; return false }() ? r - 1 : r)
+        if r <= 1 { contentView.scroll(to: NSPoint(x: 0, y: -contentInsets.top)); reflectScrolledClipView(contentView) }
+    }
+
     func set(_ rows: [ThreadSummary], keep id: String?) {
+        keepingScroll { quiet = true; setNow(rows, keep: id); quiet = false }
+    }
+
+    private func setNow(_ rows: [ThreadSummary], keep id: String?) {
         grouped = false
         table.allowsMultipleSelection = false
         let prev = selected

@@ -318,6 +318,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         view = v
         if case .search = v {} else { lastTab = v; header.search.stringValue = "" }
         reloadList()
+        list.scrollToCursor()
         if let box { prefetch(store.threads(box, v, limit: 50)) }
     }
 
@@ -339,6 +340,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         stream.invalidate()
         if case .search = view { view = lastTab }
         reloadList()
+        list.scrollToCursor()
     }
 
     private var lastOlder = Date.distantPast
@@ -398,6 +400,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         stream.invalidate()
         if case .search = view { view = lastTab }
         reloadList()
+        list.scrollToCursor()
     }
 
     func openSelected() {
