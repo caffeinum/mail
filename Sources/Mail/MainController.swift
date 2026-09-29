@@ -830,7 +830,9 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     func key(_ e: NSEvent) -> Bool {
         let bare = e.modifierFlags.intersection([.command, .control, .option]).isEmpty
-        if streaming, bare, overlay == nil, pane == nil, !resolvedVisible,
+        // (Only with emails on the page and no g-chord pending — otherwise
+        // the page never answers and the key would be swallowed.)
+        if streaming, bare, overlay == nil, pane == nil, !resolvedVisible, !pendingG, !stream.ids.isEmpty, stream.isDrawn,
            Self.actsOnEmail.contains(e.charactersIgnoringModifiers ?? "") || e.keyCode == 36 || e.keyCode == 76 {
             stream.here { [weak self] i in
                 guard let self else { return }
