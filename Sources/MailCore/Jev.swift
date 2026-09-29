@@ -48,7 +48,8 @@ public enum Jev {
         var questions: [String: Any] = [:]
         for (i, s) in samples.enumerated() {
             let id = "s\(i)"
-            state += "[\(id)] \(s.name.isEmpty ? s.email : "\(s.name) <\(s.email)>"): " + s.lines.joined(separator: " | ") + "\n"
+            let who = s.email.contains("@") ? (s.name.isEmpty ? s.email : "\(s.name) <\(s.email)>") : "mailing list \(s.name) (\(s.email))"
+            state += "[\(id)] \(who): " + s.lines.joined(separator: " | ") + "\n"
             questions[id] = ["type": "choice", "instructions": "Where should mail from sender \(id) go?", "criteria": criteria]
         }
         return ["model": "typesafe-ai/jev", "state": state, "questions": questions,

@@ -27,7 +27,7 @@ public final class Store {
 
     public static let schemaVersion = 7
     /// Bump when how threads are placed changes: the cache re-sorts on open.
-    public static let sortingVersion = 13
+    public static let sortingVersion = 14
 
     private func migrate() throws {
         let v = try db.scalar("PRAGMA user_version")
@@ -275,9 +275,11 @@ public final class Store {
         let alias = msgs.compactMap { $0.duckTo?.lowercased() }.first { aliases.contains($0) } ?? ""
         let inbound = msgs.last { !mine.contains($0.shownFrom?.normalized ?? "") && !Composer.isSelfRelay($0.from, mine: mine) }
         let senderAddr = inbound?.shownFrom
-        let senderEmail = senderAddr?.email.lowercased() ?? ""
+        // Mail from a list is the list's: one sender to place, not one per poster.
+        let list = inbound?.list
+        let senderEmail = list?.key ?? senderAddr?.email.lowercased() ?? ""
         let firstTo = last.to.first
-        let sender = senderAddr?.display ?? (firstTo.map { mine.contains($0.normalized) ? "me" : "me → \($0.display)" } ?? "me")
+        let sender = list?.name ?? senderAddr?.display ?? (firstTo.map { mine.contains($0.normalized) ? "me" : "me → \($0.display)" } ?? "me")
 
         let feedID = labelID(account, name: Streams.feed)
         let paperID = labelID(account, name: Streams.paper)
@@ -408,9 +410,11 @@ public final class Store {
             GROUP BY t.sender_email ORDER BY max(t.date) DESC LIMIT ?
             """, account, limit) { ($0.text(0), $0.text(1)) }) ?? []
         return emails.map { email, name in
+            // A list's key has no "@": its mail is found by List-Id.
+            let (col, arg) = email.contains("@") ? ("sender=?", email) : ("lower(list_id) LIKE ?", "%<\(email)>%")
             let lines = (try? db.query("""
-                SELECT subject, snippet FROM messages WHERE account=? AND sender=? ORDER BY date DESC LIMIT 3
-                """, account, email) { r -> String in
+                SELECT subject, snippet FROM messages WHERE account=? AND \(col) ORDER BY date DESC LIMIT 3
+                """, account, arg) { r -> String in
                 let snip = r.text(1).prefix(90)
                 return "\"\(r.text(0))\"" + (snip.isEmpty ? "" : " — \(snip)")
             }) ?? []

@@ -216,7 +216,9 @@ public final class Gmail: @unchecked Sendable {
 
     public struct Filter: Codable { public let id: String }
     public func createFilter(from: String, add: [String], remove: [String]) async throws -> Filter {
-        try await post("settings/filters", ["criteria": ["from": from], "action": ["addLabelIds": add, "removeLabelIds": remove]])
+        // A sender without "@" is a mailing list, matched by its List-Id.
+        let criteria: [String: String] = from.contains("@") ? ["from": from] : ["query": "list:\(from)"]
+        return try await post("settings/filters", ["criteria": criteria, "action": ["addLabelIds": add, "removeLabelIds": remove]])
     }
 
     public func deleteFilter(_ id: String) async throws { _ = try await request("DELETE", "settings/filters/\(id)") }

@@ -38,6 +38,31 @@ public struct MessageRecord: Equatable {
         self.duckFrom = duckFrom; self.duckTo = duckTo; self.bodyText = bodyText; self.bodyHTML = bodyHTML; self.hasBody = hasBody
     }
 
+    /// A mailing list is one sender, whoever posted: its List-Id address
+    /// ("ctolunches.groups.io") and name ("ctolunches").
+    public var list: (key: String, name: String)? {
+        guard let raw = listID?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
+        var key = raw, phrase = ""
+        if let lt = raw.lastIndex(of: "<"), let gt = raw.lastIndex(of: ">"), lt < gt {
+            key = String(raw[raw.index(after: lt)..<gt])
+            phrase = String(raw[..<lt]).trimmingCharacters(in: CharacterSet(charactersIn: " \""))
+        }
+        key = key.lowercased().trimmingCharacters(in: .whitespaces)
+        guard !key.isEmpty, !key.contains("@") else { return nil }
+        let usable = !phrase.isEmpty && phrase.count <= 60 && !phrase.allSatisfy(\.isNumber)
+        return (key, usable ? phrase : Self.listName(key))
+    }
+
+    /// "worldwide.ctolunches.groups.io" → "ctolunches": the label next to a
+    /// list host's own domain, else the first label.
+    static func listName(_ key: String) -> String {
+        for host in [".groups.io", ".googlegroups.com", ".substack.com", ".github.com", ".list-manage.com"] where key.hasSuffix(host) {
+            let rest = key.dropLast(host.count)
+            if let last = rest.split(separator: ".").last { return String(last) }
+        }
+        return String(key.split(separator: ".").first ?? Substring(key))
+    }
+
     /// Who the ui says it's from: the real sender behind a forwarding alias.
     public var shownFrom: Address? { duckFrom ?? from }
 

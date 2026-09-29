@@ -207,3 +207,21 @@ func msg(_ id: String, thread: String, from: String, subject: String = "hi", lab
         #expect(s.thread(account: gmail, id: "b")!.from == "solo@x.com")
     }
 }
+
+@Suite struct MailingLists {
+    @Test func postersToAListAreOneSender() throws {
+        let s = try tempStore()
+        var a = msg("1", thread: "a", from: "peter=pbell.com@groups.io", subject: "[ctolunches] Intro")
+        a.listID = "<worldwide.ctolunches.groups.io>"
+        var b = msg("2", thread: "b", from: "dave=x.com@groups.io", subject: "[ctolunches] Legal")
+        b.listID = "ctolunches <worldwide.ctolunches.groups.io>"
+        try s.upsert([a, b])
+        let box = Mailbox(account: gmail, kind: .gmail, title: "g")
+        let rows = s.threads(box, .newSenders)
+        #expect(Set(rows.map(\.senderEmail)) == ["worldwide.ctolunches.groups.io"])
+        #expect(rows.contains { $0.sender == "ctolunches" })
+        #expect(s.sendersToJudge(gmail).count == 1)
+        try s.decide(account: gmail, email: "worldwide.ctolunches.groups.io", decision: "feed")
+        #expect(s.threads(box, .newSenders).isEmpty)
+    }
+}

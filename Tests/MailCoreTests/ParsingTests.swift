@@ -97,3 +97,14 @@ import Foundation
         #expect(s.sendersToJudge(gmail).isEmpty)
     }
 }
+
+@Suite struct ListNames {
+    @Test func listsAreNamedSensibly() {
+        func l(_ raw: String) -> String? { MessageRecord(account: "a", id: "1", threadID: "t", listID: raw).list?.name }
+        #expect(l("<worldwide.ctolunches.groups.io>") == "ctolunches")
+        #expect(l("<bayarealesswrong.googlegroups.com>") == "bayarealesswrong")
+        #expect(l("team2027/sanity-cli <sanity-cli.team2027.github.com>") == "team2027/sanity-cli")
+        #expect(l("1025435519 <Huel>") == "huel")
+        #expect(l("<98b5@google.com>") == nil)
+    }
+}
