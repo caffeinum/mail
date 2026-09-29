@@ -754,7 +754,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "R": compose(.replyAll)
         case "F": compose(.forward)
         case "a": decide("inbox")
-        case "f": decide("feed")
+        case "f", "s": decide("feed")   // s: subscribe
         case "n": decide("notify")
         case "p": decide("paper")
         case "x": decide("blocked")

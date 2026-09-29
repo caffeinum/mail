@@ -51,9 +51,9 @@ final class PaletteOverlay: Overlay, NSTableViewDataSource, NSTableViewDelegate,
     static func commands(_ m: MainController) -> [Command] {
         var c: [Command] = [
             .init(title: "Go to Inbox", key: "g i") { m.go(.inbox) },
-            .init(title: "Go to Notifications", key: "g o") { m.go(.notifications) },
             .init(title: "Go to Feed", key: "g f") { m.go(.feed) },
             .init(title: "Go to Paper Trail", key: "g p") { m.go(.paper) },
+            .init(title: "Go to Notifications", key: "g o") { m.go(.notifications) },
             .init(title: "Go to New Senders", key: "g n") { m.go(.newSenders) },
             .init(title: "Go to Spam", key: "g x") { m.go(.spam) },
             .init(title: "Go to Muted", key: "g m") { m.go(.muted) },

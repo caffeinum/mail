@@ -159,7 +159,7 @@ public enum View: Equatable, Hashable {
         }
     }
 
-    public static let tabs: [View] = [.inbox, .notifications, .feed, .paper, .newSenders]
+    public static let tabs: [View] = [.inbox, .feed, .paper, .notifications, .newSenders]
 
     public init?(key: String) {
         switch key {
