@@ -85,6 +85,8 @@ public final class Engine: @unchecked Sendable {
     }
 
     private var paging = Set<String>()
+    /// Accounts whose last try at older mail failed (offline, no token).
+    public private(set) var olderFailed = Set<String>()
 
     /// Older mail, a page at a time: once per sync in the background until
     /// the inbox is fully cached, and at once when the list nears its end.
@@ -102,9 +104,11 @@ public final class Engine: @unchecked Sendable {
                 guard try await s.backfill("in:inbox") else { break }
                 if store.count(Mailbox(account: account, kind: .gmail, title: ""), .inbox) != before { break }
             }
+            await MainActor.run { _ = self.olderFailed.remove(account) }
             DispatchQueue.main.async { self.onChange?(account) }
             await judge(account)
         } catch {
+            await MainActor.run { _ = self.olderFailed.insert(account) }
             log("\(account): backfill failed, will retry next sync: \(error)")
         }
     }

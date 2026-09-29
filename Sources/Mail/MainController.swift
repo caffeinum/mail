@@ -346,15 +346,22 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         let accounts = olderAccounts
         guard !accounts.isEmpty else { return nil }
         if accounts.contains(where: pagingNow.contains) { return "Loading older mail…" }
+        if accounts.contains(where: { engine.olderFailed.contains($0) }) { return "Couldn't load older mail — ⌘R to try again" }
         return accounts.contains(where: engine.hasOlder) ? "Scroll for older mail" : "That's everything"
     }
 
+    private var rowsBeforePage = 0
+
     func pagingChanged(account: String, active: Bool) {
-        if active { pagingNow.insert(account) } else { pagingNow.remove(account) }
+        if active { pagingNow.insert(account); rowsBeforePage = list.rows.count } else { pagingNow.remove(account) }
         list.loading = !pagingNow.isEmpty
         list.footer = olderFooter()
-        // Still at the bottom after a page landed: keep going.
-        if !active, list.nearEnd, !reading { lastOlder = .distantPast; loadOlder() }
+        // Still at the bottom after a page brought something: keep going.
+        // A page that brought nothing (or failed) stops here — no endless loader.
+        if !active, pagingNow.isEmpty, list.nearEnd, !reading, list.rows.count > rowsBeforePage {
+            lastOlder = .distantPast
+            loadOlder()
+        }
     }
 
     /// Near the bottom of a list: ask gmail for the next page of older mail.
