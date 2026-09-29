@@ -241,11 +241,15 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         engine.pokeOutbox()
     }
 
+    /// Follows the scroll: whatever email is at the top of the view is the
+    /// current one (highlighted, and what keys act on); everything above it
+    /// has been read.
     private func watchViewed() {
         viewedTimer?.invalidate()
-        viewedTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
-            guard let self, self.streaming, self.pane == nil else { return }
+        viewedTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in
+            guard let self, self.streaming, self.pane == nil, self.overlay == nil else { return }
             self.stream.here { i in
+                self.selectStream(i)
                 self.markViewed(self.streamRows.prefix(i).map(\.id))
             }
         }
@@ -258,16 +262,29 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     private func showStream() {
         fill(content, with: stream)
-        streamRows = orderedFeed()
         if viewedTimer == nil { watchViewed() }
+        if stream.isDrawn {
+            // Already on screen: only take out what left; nothing moves.
+            let present = Set(list.rows.map(\.id))
+            streamRows.removeAll { !present.contains($0.id) }
+            let items = streamRows.map { FeedStream.Item(id: $0.id, sender: "", subject: "", when: "", html: "", cached: true) }
+            stream.show(items, at: 0, images: streamImagesOn)
+            return
+        }
+        streamRows = orderedFeed()
         let rows = streamRows
         let at = streamRows.firstIndex { $0.id == list.selected?.id } ?? 0
+        let tags = box?.isAll == true
         let items = rows.map { t -> FeedStream.Item in
             let last = store.messages(account: t.account, thread: t.id).last
-            return FeedStream.item(t, last, images: streamImages || last.map(imagesAllowed) == true)
+            return FeedStream.item(t, last, images: streamImages || last.map(imagesAllowed) == true,
+                                   account: tags ? (boxFor(t)?.title ?? "") : "")
         }
-        stream.show(Array(items), at: at, images: streamImages || items.contains { !$0.html.contains("blocked-http") && WebRenderer.hasRemoteImages($0.html) })
+        streamImagesOn = streamImages || items.contains { !$0.html.contains("blocked-http") && WebRenderer.hasRemoteImages($0.html) }
+        stream.show(Array(items), at: at, images: streamImagesOn)
     }
+
+    private var streamImagesOn = false
 
     // MARK: engine callbacks
 
@@ -465,11 +482,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     private func act(_ title: String, _ f: ([ThreadSummary]) throws -> Void) {
         guard let t = list.selected else { return }
         if streaming {
-            // Stay where you are: the next post slides up into place.
-            let si = streamRows.firstIndex { $0.id == t.id } ?? 0
-            let next = streamRows.indices.contains(si + 1) ? streamRows[si + 1].id : (si > 0 ? streamRows[si - 1].id : nil)
+            // Stay where you are: the email leaves the page and the next one
+            // slides up into its place.
             do { try f([t]) } catch { toast.show("\(title) failed: \(error)"); return }
-            reloadList(keep: next)
+            reloadList()
             toast.show("\(title)  ·  z to undo")
             return
         }
@@ -487,6 +503,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         do {
             if let t = try actions.undoLast() { toast.show("Undid \(t.lowercased())") } else { toast.show("Nothing to undo") }
         } catch { toast.show("Undo failed: \(error)") }
+        // Whatever came back belongs where it was: redraw the feed around it.
+        if streaming { stream.invalidate() }
         reloadList(keep: list.selected?.id)
         if reading, let t = reader.thread {
             reader.show(t, messages: store.messages(account: t.account, thread: t.id))
@@ -722,7 +740,25 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
 
     // MARK: keys
 
+    /// In the feed the email on screen is the one keys act on — ask the page
+    /// which that is before acting, rather than trusting a cursor that
+    /// scrolling may have left behind.
+    private var resolvedVisible = false
+    private static let actsOnEmail: Set<String> = ["e", "#", "!", "U", "m", "M", "r", "R", "F", "o", "i", "I"]
+
     func key(_ e: NSEvent) -> Bool {
+        let bare = e.modifierFlags.intersection([.command, .control, .option]).isEmpty
+        if streaming, bare, overlay == nil, pane == nil, !resolvedVisible,
+           Self.actsOnEmail.contains(e.charactersIgnoringModifiers ?? "") || e.keyCode == 36 || e.keyCode == 76 {
+            stream.here { [weak self] i in
+                guard let self else { return }
+                self.selectStream(i)
+                self.resolvedVisible = true
+                _ = self.key(e)
+                self.resolvedVisible = false
+            }
+            return true
+        }
         let mods = e.modifierFlags.intersection([.command, .control, .option])
         let ch = e.charactersIgnoringModifiers ?? ""
         if mods == .control, let n = Int(ch) {
