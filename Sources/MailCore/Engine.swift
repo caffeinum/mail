@@ -122,14 +122,20 @@ public final class Engine: @unchecked Sendable {
         let start: Bool = await MainActor.run { judging.insert(account).inserted }
         guard start else { return }
         defer { Task { @MainActor in self.judging.remove(account) } }
-        let samples = store.sendersToJudge(account)
-        guard !samples.isEmpty else { return }
+        // Every waiting sender, a batch at a time — not just the newest 100.
+        var total = 0
+        let t = Date()
         do {
-            let t = Date()
-            let verdicts = try await Jev.classify(samples)
-            try store.saveVerdicts(account, verdicts)
-            log("\(account): jev placed \(verdicts.count)/\(samples.count) new senders in \(Int(Date().timeIntervalSince(t) * 1000))ms")
-            DispatchQueue.main.async { self.onChange?(account) }
+            while true {
+                let samples = store.sendersToJudge(account, limit: 100)
+                guard !samples.isEmpty else { break }
+                let verdicts = try await Jev.classify(samples)
+                try store.saveVerdicts(account, verdicts)
+                total += verdicts.count
+                DispatchQueue.main.async { self.onChange?(account) }
+                if verdicts.count < samples.count { break }   // some unanswered: try them next sync
+            }
+            if total > 0 { log("\(account): jev placed \(total) new senders in \(Int(Date().timeIntervalSince(t) * 1000))ms") }
         } catch {
             log("\(account): jev failed, keeping the rule-based suggestions: \(error)")
         }

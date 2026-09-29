@@ -11,11 +11,13 @@ import MailCore
 /// next slides up — so it never jumps under you.
 final class FeedStream: NSView {
     private(set) var ids: [String] = []
+    /// Drawn from the snippet while the full email was still on its way.
+    private(set) var previews = Set<String>()
     private var drawn = false
     private var images = false
 
     /// The web view went elsewhere (a thread was opened): draw afresh next time.
-    func invalidate() { ids = []; drawn = false }
+    func invalidate() { ids = []; previews = []; drawn = false }
     var isDrawn: Bool { drawn && web.superview === self }
 
     override init(frame: NSRect) { super.init(frame: frame) }
@@ -98,11 +100,12 @@ final class FeedStream: NSView {
             return
         }
         ids = items.map(\.id)
+        previews = Set(items.filter { !$0.cached }.map(\.id))
         self.images = images
         drawn = true
         WebRenderer.shared.blank(background: Palette.css.bg, images: images) { [weak self] in
             guard let self else { return }
-            self.run(Self.script(dark: Palette.isDark) + "render(\(self.json(items))); go(\(index), false)")
+            self.run(Self.script(dark: Palette.isDark) + "render(\(self.json(items))); go(\(index), false); footer(\(self.json([self.footerState.0]))[0], \(self.footerState.1))")
         }
     }
 
@@ -110,8 +113,24 @@ final class FeedStream: NSView {
     func append(_ items: [Item]) {
         guard drawn, !items.isEmpty else { return }
         ids += items.map(\.id)
+        previews.formUnion(items.filter { !$0.cached }.map(\.id))
         run("append(\(json(items)))")
     }
+
+    /// Full emails that arrived for cards drawn from their snippet.
+    func fill(_ items: [Item]) {
+        guard drawn, !items.isEmpty else { return }
+        previews.subtract(items.map(\.id))
+        run("fill(\(json(items)))")
+    }
+
+    /// The line under the last email: loading, or that there's no more.
+    func footer(_ text: String?, loading: Bool) {
+        footerState = (text ?? "", loading)
+        guard drawn else { return }
+        run("typeof footer === 'function' && footer(\(json([text ?? ""]))[0], \(loading))")
+    }
+    private var footerState = ("", false)
 
     func scroll(to i: Int) { run("go(\(i), true)") }
 
@@ -202,8 +221,23 @@ final class FeedStream: NSView {
         function lastGroup() {
           const hs = document.querySelectorAll('h6'); return hs.length ? hs[hs.length - 1].dataset.g : null;
         }
+        function fill(items) {
+          for (const it of items) {
+            const old = document.getElementById('t' + it.id); if (!old) continue;
+            const fresh = card(it); fresh.className = old.className;
+            old.replaceWith(fresh);
+          }
+        }
+        function footer(text, loading) {
+          let f = document.getElementById('foot');
+          if (!f) { f = document.createElement('div'); f.id = 'foot'; f.style.cssText = 'max-width:980px;margin:10px auto;text-align:center;color:\(dim);font-size:13px;padding:18px'; }
+          document.body.appendChild(f);
+          f.textContent = (loading ? '⟳  ' : '') + text;
+          f.style.display = text && arts().length ? 'block' : 'none';
+        }
         function append(items) {
           document.getElementById('end')?.remove();
+          const f = document.getElementById('foot');
           let group = lastGroup();
           for (const it of items) {
             if (it.group && it.group !== group) {
@@ -213,6 +247,7 @@ final class FeedStream: NSView {
             }
             document.body.appendChild(card(it));
           }
+          if (f) document.body.appendChild(f);
           ending();
         }
         // Nothing left: say so instead of a blank page.

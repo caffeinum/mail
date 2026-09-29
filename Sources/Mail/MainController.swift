@@ -278,6 +278,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             }
             let items = streamRows.map { FeedStream.Item(id: $0.id, sender: "", subject: "", when: "", html: "", cached: true) }
             stream.show(items, at: 0, images: streamImagesOn)
+            let arrived = streamRows.filter { stream.previews.contains($0.id) && store.hasBodies(account: $0.account, thread: $0.id) }
+            stream.fill(arrived.map(feedItem))
             topUpStream()
             return
         }
@@ -291,6 +293,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
                                    account: tags ? (boxFor(t)?.title ?? "") : "")
         }
         streamImagesOn = streamImages || items.contains { !$0.html.contains("blocked-http") && WebRenderer.hasRemoteImages($0.html) }
+        stream.footer(olderFooter(), loading: !pagingNow.isEmpty)
         stream.show(Array(items), at: at, images: streamImagesOn)
     }
 
@@ -311,8 +314,10 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         if !more.isEmpty, force || streamRows.count < 15 {
             streamRows += more
             stream.append(more.map(feedItem))
+            prefetch(Array(more))
         }
         if more.count < 20 { loadOlder() }
+        stream.footer(olderFooter(), loading: !pagingNow.isEmpty)
     }
 
     // MARK: engine callbacks
@@ -416,6 +421,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         if active { pagingNow.insert(account); rowsBeforePage = list.rows.count } else { pagingNow.remove(account) }
         list.loading = !pagingNow.isEmpty
         list.footer = olderFooter()
+        if streaming { stream.footer(olderFooter(), loading: !pagingNow.isEmpty) }
         // Still at the bottom after a page brought something: keep going.
         // A page that brought nothing (or failed) stops here — no endless loader.
         if !active, pagingNow.isEmpty, list.nearEnd, !reading, list.rows.count > rowsBeforePage {
