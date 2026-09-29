@@ -508,14 +508,52 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         list.step(d)
     }
 
+    /// Home / End / Page Up / Page Down move the cursor, not just the view.
+    private func navigate(_ code: UInt16) -> Bool {
+        if streaming {
+            switch code {
+            case 115: stream.scroll(to: 0)
+            case 119: stream.scroll(to: streamRows.count - 1)
+            default: stream.page(code == 116 ? -1 : 1)
+            }
+            return true
+        }
+        if reading {
+            switch code {
+            case 115: WebRenderer.shared.view.evaluateJavaScript("window.scrollTo(0,0)")
+            case 119: WebRenderer.shared.view.evaluateJavaScript("window.scrollTo(0,document.body.scrollHeight)")
+            default: reader.scrollBody(by: code == 116 ? -1 : 1)
+            }
+            return true
+        }
+        let perPage = max(1, Int(list.contentView.bounds.height / Style.rowHeight) - 2)
+        switch code {
+        case 115: list.select(0)
+        case 119: list.select(list.rows.count - 1)
+        default: for _ in 0..<perPage { list.step(code == 116 ? -1 : 1) }
+        }
+        return true
+    }
+
     /// The first j at the bottom of a thread only arms the move to the next.
     private var edgeArmed: Int?
     private var edgeArmedAt = Date.distantPast
 
     // MARK: actions
 
+    /// Where each undoable action happened, so z puts you back there — the
+    /// thread selected again, and open again if it was open.
+    private var undoPlaces: [(depth: Int, account: String, id: String, wasReading: Bool)] = []
+
+    private func remember(_ t: ThreadSummary, reading was: Bool) {
+        undoPlaces.append((actions.undo.count, t.account, t.id, was))
+    }
+
     private func act(_ title: String, _ f: ([ThreadSummary]) throws -> Void) {
         guard let t = list.selected else { return }
+        let wasReading = reading
+        let depth = actions.undo.count
+        defer { if actions.undo.count > depth { remember(t, reading: wasReading) } }
         if streaming {
             // Stay where you are: the email leaves the page and the next one
             // slides up into its place.
@@ -535,14 +573,23 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     }
 
     private func undo() {
+        let place = undoPlaces.last.flatMap { $0.depth == actions.undo.count - 1 ? $0 : nil }
         do {
-            if let t = try actions.undoLast() { toast.show("Undid \(t.lowercased())") } else { toast.show("Nothing to undo") }
-        } catch { toast.show("Undo failed: \(error)") }
+            if let t = try actions.undoLast() { toast.show("Undid \(t.lowercased())") } else { toast.show("Nothing to undo"); return }
+        } catch { toast.show("Undo failed: \(error)"); return }
+        undoPlaces.removeAll { $0.depth >= actions.undo.count }
         // Whatever came back belongs where it was: redraw the feed around it.
         if streaming { stream.invalidate() }
-        reloadList(keep: list.selected?.id)
-        if reading, let t = reader.thread {
-            reader.show(t, messages: store.messages(account: t.account, thread: t.id))
+        guard let place else {
+            reloadList(keep: list.selected?.id)
+            if reading, let t = reader.thread { reader.show(t, messages: store.messages(account: t.account, thread: t.id)) }
+            return
+        }
+        // Back to the email the action was taken on — and open, if it was.
+        reloadList(keep: place.id)
+        if list.selected?.id == place.id {
+            if place.wasReading { openSelected() }
+            else if reading { closeThread(); reloadList(keep: place.id) }
         }
     }
 
@@ -861,6 +908,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             return true
         case 124 where list.grouped && !reading: list.fold(open: true); return true   // right
         case 123 where list.grouped && !reading: list.fold(open: false); return true  // left
+        case 115, 119, 116, 121: // home, end, page up, page down
+            return navigate(e.keyCode)
         case 125: step(1); return true   // down
         case 126: step(-1); return true  // up
         case 49: // space
