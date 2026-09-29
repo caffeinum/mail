@@ -159,7 +159,7 @@ public enum View: Equatable, Hashable {
         }
     }
 
-    public static let tabs: [View] = [.inbox, .feed, .paper, .notifications, .newSenders]
+    public static let tabs: [View] = [.inbox, .feed, .paper, .notifications, .muted, .newSenders]
 
     public init?(key: String) {
         switch key {
@@ -203,3 +203,4 @@ public enum Streams {
         switch c { case .feed: return feed; case .paper: return paper; case .notify: return notifications; case .inbox: return nil }
     }
 }
+public typealias MailCategory = Category

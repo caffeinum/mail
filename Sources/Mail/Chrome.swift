@@ -183,7 +183,7 @@ final class HelpOverlay: Overlay {
         ("e", "done (out of the inbox)"), ("#", "trash"), ("!", "spam (again in Spam: not spam)"), ("g x", "spam folder"), ("M", "mute sender (g m: Muted)"), ("U", "read / unread"), ("z", "undo"),
         ("/", "search"), ("⌘K", "command palette"), ("c", "new message"), ("r / R / F", "reply / reply all / forward"),
         ("⌘↩", "send"), ("tab / ⇧tab", "next / previous stream"), ("g i · g f · g p · g o · g n", "inbox · feed · paper trail · notifications · new senders"),
-        ("⌃1 ⌃2 ⌃3", "switch account"), ("a · s · p · n · x · y", "new sender: inbox · feed (subscribe) · paper trail · notifications · block · as suggested"),
+        ("⌃1 ⌃2 ⌃3", "switch account"), ("a · s · p · n · x · y", "new senders: inbox · feed · paper trail · notifications · block · as proposed"), ("› / ‹  ·  ⌘A", "unfold / fold a sender · select the whole section"),
         ("i / ⇧I", "images for this email / always from sender"), ("m", "move sender to inbox · feed · paper trail"), ("v", "feed as stream / list"),
         ("space", "scroll"), ("⌘R", "check for mail"), ("⌘,", "accounts"), ("?", "this card"),
     ]

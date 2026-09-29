@@ -4,6 +4,12 @@ import MailCore
 final class KeyWindow: NSWindow {
     var router: ((NSEvent) -> Bool)?
 
+    /// ⌘ keys reach the router before the menus (⌘A in New Senders selects a section).
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if !isEditingText, let router, router(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, !isEditingText, let router, router(event) { return }
         super.sendEvent(event)
@@ -119,6 +125,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         list.onOpen = { [weak self] i in self?.list.select(i); self?.openSelected() }
         list.onSelect = { [weak self] _ in self?.prefetchAroundCursor() }
         list.onNearEnd = { [weak self] in self?.loadOlder() }
+        list.onFold = { [weak self] open in self?.store.set("ui.ns.open", open.sorted().joined(separator: "\n")) }
     }
 
     private func fill(_ host: NSView, with v: NSView) {
@@ -177,22 +184,23 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         if let t = list.selected { store.set("ui.thread", t.id) }
     }
 
-    func reloadList(keep id: String? = nil) {
+    func reloadList(keep id: String? = nil, keepSender: String? = nil) {
         guard let box else {
             list.set([], keep: nil)
             header.update(boxes: [], current: nil, view: view, counts: [:], note: "No accounts yet — ⌘, to add one")
             return
         }
-        list.suggest = view == .newSenders
+        list.suggest = false
+        list.forceRead = view == .muted
         list.accountTags = box.isAll ? Dictionary(boxes.map { ($0.account + "\u{1}" + ($0.alias?.address.lowercased() ?? ""), $0.title) }, uniquingKeysWith: { a, _ in a }) : [:]
         list.footer = olderFooter()
         var rows = store.threads(box, view, limit: 20000)
         if view == .newSenders {
-            // One row per sender — their latest thread stands for them.
-            var seen = Set<String>()
-            rows = rows.filter { seen.insert($0.account + $0.senderEmail).inserted }
+            list.expanded = Set((store.get("ui.ns.open") ?? "").split(separator: "\n").map(String.init))
+            list.setGrouped(rows, keep: id, keepSender: keepSender)
+        } else {
+            list.set(rows, keep: id)
         }
-        list.set(rows, keep: id)
         if pane == nil { if streaming { showStream() } else if !reading { fill(content, with: list) } }
         var counts: [View: Int] = [:]
         for v in View.tabs { counts[v] = store.count(box, v) }
@@ -262,7 +270,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
     func cacheChanged(account: String) {
         errors[account] = nil
         guard box?.account == account || box?.isAll == true else { return }
-        reloadList(keep: list.selected?.id)
+        reloadList(keep: list.grouped ? nil : list.selected?.id)
         if reading, let t = reader.thread {
             let fresh = store.thread(account: t.account, id: t.id) ?? t
             reader.show(fresh, messages: store.messages(account: t.account, thread: t.id))
@@ -478,9 +486,31 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         }
     }
 
-    private func decide(_ category: String) {
-        guard view == .newSenders, let t = list.selected, !t.senderEmail.isEmpty else { return }
-        act(actions.title(for: category)) { _ in try actions.decide(account: t.account, email: t.senderEmail, category: category) }
+    /// Places every selected sender (⌘A selects a whole section). With no
+    /// category given, each goes where it was proposed.
+    private func decide(_ category: String?) {
+        guard view == .newSenders else { return }
+        let picked = list.selectedGroups
+        guard !picked.isEmpty else { return }
+        let placements = picked.compactMap { g -> (account: String, email: String, category: String)? in
+            guard let c = category ?? g.category?.rawValue else { return nil }
+            return (g.account, g.email, c)
+        }
+        guard !placements.isEmpty else { toast.show("No proposed label yet — pick one: a · s · p · n"); return }
+        let next = list.groups.indices.first { i in i > (list.selectedGroup ?? 0) && !picked.contains { $0.key == list.groups[i].key } }
+        let keepKey = next.map { list.groups[$0].key }
+        do {
+            if placements.count == 1, let p = placements.first {
+                try actions.decide(account: p.account, email: p.email, category: p.category)
+            } else {
+                for (account, ps) in Dictionary(grouping: placements, by: \.account) {
+                    try actions.decideMany(account: account, ps.map { ($0.email, $0.category) })
+                }
+            }
+        } catch { toast.show("\(error)"); return }
+        reloadList(keepSender: keepKey)
+        let title = placements.count == 1 ? actions.title(for: placements[0].category) : "Placed \(placements.count) senders"
+        toast.show("\(title)  ·  z to undo")
     }
 
     func compose(_ mode: ReplyMode) {
@@ -697,6 +727,7 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             case "k": showPalette(); return true
             case "r": engine.syncAll(); toast.show("Checking for new mail…"); return true
             case "s": toggleSidebar(); return true
+            case "a" where list.grouped: list.selectAllInSection(); return true
             default: return false
             }
         }
@@ -744,9 +775,12 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
             if case .search = view { header.search.stringValue = ""; go(lastTab); return true }
             return false
         case 36, 76: // return
+            if list.grouped && !reading && !list.selectedRowIsThread { list.fold(open: nil); return true }
             if !reading { openSelected(); return true }
             compose(.reply)
             return true
+        case 124 where list.grouped && !reading: list.fold(open: true); return true   // right
+        case 123 where list.grouped && !reading: list.fold(open: false); return true  // left
         case 125: step(1); return true   // down
         case 126: step(-1); return true  // up
         case 49: // space
@@ -762,7 +796,8 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "g": pendingG = true
         case "G": list.select(list.rows.count - 1); if reading { openSelected() }; if streaming { stream.scroll(to: min(39, list.rows.count - 1)) }
         case "v": if view == .feed && !reading { streamMode.toggle(); reloadList(keep: list.selected?.id) }
-        case "o": if !reading { openSelected() }
+        case "o":
+            if list.grouped && !list.selectedRowIsThread { list.fold(open: nil) } else if !reading { openSelected() }
         case "u": if reading { closeThread() }
         case "e": act("Done") { try actions.done($0) }
         case "#": act("Trashed") { try actions.trash($0) }
@@ -787,10 +822,9 @@ final class MainController: NSObject, NSWindowDelegate, NSSearchFieldDelegate {
         case "n": decide("notify")
         case "p": decide("paper")
         case "x": decide("blocked")
-        case "y":
-            if view == .newSenders, let t = list.selected {
-                if let c = t.category { decide(c.rawValue) } else { toast.show("No suggestion yet for \(t.sender)") }
-            }
+        case "y": decide(nil)
+        case "h": if list.grouped { list.fold(open: false) }
+        case "l": if list.grouped { list.fold(open: true) }
         case "1", "2", "3", "4", "5", "6", "7", "8", "9": switchBox(Int(ch)! - 1)
         default: return false
         }
