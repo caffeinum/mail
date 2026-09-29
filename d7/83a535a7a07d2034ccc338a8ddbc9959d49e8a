@@ -1,0 +1,25 @@
+Sources/Mail/Chrome.swift
+  s_f86aa9fa11a3e8::t_a988731fe9de78 186
+Sources/Mail/ListView.swift
+  s_f86aa9fa11a3e8::t_da5fa0489192b1 51-74,142-277,279-280,300-306,314,318,323-328,339-342,349,363-366,369-370,414-457,491-492,513-515
+Sources/Mail/MainController.swift
+  s_f86aa9fa11a3e8::t_296e7f0b317438 7-12,128,187,193-194,199-202,273,489-513,730,778,782-783,799-800,825-827
+Sources/MailCore/Message.swift
+  s_f86aa9fa11a3e8::t_eb0c15d75623b4 162,206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d783a535a7a07d2034ccc338a8ddbc9959d49e8a",
+  "prompts": {},
+  "sessions": {
+    "s_f86aa9fa11a3e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39afd6ac-718f-42dd-970c-aa7268bcbac8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Aleksey Bykhun <theisease@gmail.com>"
+    }
+  }
+}
