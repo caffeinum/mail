@@ -6,7 +6,10 @@ final class KeyWindow: NSWindow {
 
     /// ⌘ keys reach the router before the menus (⌘A in New Senders selects a section).
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if !isEditingText, let router, router(event) { return true }
+        // Only ⌘/⌃ chords: plain keys already went through sendEvent, and
+        // routing them twice ran every key twice (g g, j j, a move twice).
+        let chord = !event.modifierFlags.intersection([.command, .control]).isEmpty
+        if chord, !isEditingText, let router, router(event) { return true }
         return super.performKeyEquivalent(with: event)
     }
 
